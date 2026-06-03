@@ -92,7 +92,12 @@ Private Sub ProcessFolder(fso As Object, folder As Object, _
     For Each subFolder In folder.SubFolders
         ignoreName = NormalizeFolderName(subFolder.Name)
         If Not IsIgnoredFolder(ignoreName, ignoreFolders) Then
-            Call ProcessFolder(fso, subFolder, srcFileName, srcSheetName, wsTarget, outputRow)
+            ' アクセス不可フォルダ（シンボリックリンク等）をスキップ
+            If fso.FolderExists(subFolder.Path) Then
+                On Error Resume Next
+                Call ProcessFolder(fso, subFolder, srcFileName, srcSheetName, wsTarget, outputRow)
+                On Error GoTo 0
+            End If
         End If
     Next subFolder
 

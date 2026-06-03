@@ -42,13 +42,13 @@ Public Sub ImportUnitSpecList()
     With wsTarget
         .Cells(outputRow, 1).Value = "ソフトウェアユニット仕様ID"
         .Cells(outputRow, 2).Value = "ソフトウェアユニット仕様名"
-        .Cells(outputRow, 3).Value = "仕様status"
-        .Cells(outputRow, 4).Value = "関数仕様ID"
-        .Cells(outputRow, 5).Value = "関数仕様名"
-        .Cells(outputRow, 6).Value = "優先順位"
-        .Cells(outputRow, 7).Value = "備考"
-        .Cells(outputRow, 8).Value = "搭載関数ID"
-        .Cells(outputRow, 9).Value = "搭載関数名"
+        .Cells(outputRow, 3).Value = "搭載関数ID"
+        .Cells(outputRow, 4).Value = "搭載関数名"
+        .Cells(outputRow, 5).Value = "関数仕様ID"
+        .Cells(outputRow, 6).Value = "関数仕様名"
+        .Cells(outputRow, 7).Value = "仕様status"
+        .Cells(outputRow, 8).Value = "優先順位"
+        .Cells(outputRow, 9).Value = "備考"
     End With
     outputRow = 2
 
@@ -201,13 +201,13 @@ Private Sub ReadMainFile(filePath As String, srcSheetName As String, _
             With wsTarget
                 .Cells(outputRow, 1).Value = unitID
                 .Cells(outputRow, 2).Value = unitName
-                .Cells(outputRow, 3).Value = unitStatus
-                .Cells(outputRow, 4).Value = cellC
-                .Cells(outputRow, 5).Value = Trim(CStr(wsSrc.Cells(i, 4).Value))
-                .Cells(outputRow, 6).Value = Trim(CStr(wsSrc.Cells(i, 5).Value))
-                .Cells(outputRow, 7).Value = Trim(CStr(wsSrc.Cells(i, 6).Value))
-                .Cells(outputRow, 8).Value = Trim(CStr(wsSrc.Cells(i, 7).Value))
-                .Cells(outputRow, 9).Value = Trim(CStr(wsSrc.Cells(i, 8).Value))
+                .Cells(outputRow, 3).Value = Trim(CStr(wsSrc.Cells(i, 7).Value))
+                .Cells(outputRow, 4).Value = Trim(CStr(wsSrc.Cells(i, 8).Value))
+                .Cells(outputRow, 5).Value = cellC
+                .Cells(outputRow, 6).Value = Trim(CStr(wsSrc.Cells(i, 4).Value))
+                .Cells(outputRow, 7).Value = unitStatus
+                .Cells(outputRow, 8).Value = Trim(CStr(wsSrc.Cells(i, 5).Value))
+                .Cells(outputRow, 9).Value = Trim(CStr(wsSrc.Cells(i, 6).Value))
             End With
             outputRow = outputRow + 1
         End If
@@ -289,9 +289,9 @@ Private Sub BuildSummarySheet(wsDetail As Worksheet)
             Dim fID   As String
             Dim fName As String
             Dim fCarriedName As String
-            fID          = Trim(CStr(wsDetail.Cells(i, 4).Value))
-            fName        = Trim(CStr(wsDetail.Cells(i, 5).Value))
-            fCarriedName = Trim(CStr(wsDetail.Cells(i, 9).Value))
+            fID          = Trim(CStr(wsDetail.Cells(i, 5).Value))
+            fName        = Trim(CStr(wsDetail.Cells(i, 6).Value))
+            fCarriedName = Trim(CStr(wsDetail.Cells(i, 4).Value))
 
             If fID <> "" Then
                 funcCount = funcCount + 1

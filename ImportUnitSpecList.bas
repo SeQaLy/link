@@ -2,8 +2,8 @@ Option Explicit
 
 Public Sub ImportUnitSpecList()
 
-    Const TARGET_SHEET  As String = "XXXXXX"
-    Const SRC_SHEET     As String = "XXXXXX"
+    Const TARGET_SHEET  As String = "ユニット仕様一覧"
+    Const SRC_SHEET     As String = "3.2.ユニット仕様一覧"
     Const SRC_FILENAME  As String = "XXXXXX"
 
     Dim fso             As Object
@@ -40,15 +40,15 @@ Public Sub ImportUnitSpecList()
     ' ---- ヘッダー行 ----
     outputRow = 1
     With wsTarget
-        .Cells(outputRow, 1).Value = "XXXXXXXXX"
-        .Cells(outputRow, 2).Value = "XXXXXXXXX"
-        .Cells(outputRow, 3).Value = "XXXXXXXXX"
-        .Cells(outputRow, 4).Value = "XXXXXXXXX"
-        .Cells(outputRow, 5).Value = "XXXXXXXXX"
-        .Cells(outputRow, 6).Value = "XXXXXXXXX"
-        .Cells(outputRow, 7).Value = "XXXXXXXXX"
-        .Cells(outputRow, 8).Value = "XXXXXXXXX"
-        .Cells(outputRow, 9).Value = "XXXXXXXXX"
+        .Cells(outputRow, 1).Value = "ソフトウェアユニット仕様ID"
+        .Cells(outputRow, 2).Value = "ソフトウェアユニット仕様名"
+        .Cells(outputRow, 3).Value = "仕様status"
+        .Cells(outputRow, 4).Value = "関数仕様ID"
+        .Cells(outputRow, 5).Value = "関数仕様名"
+        .Cells(outputRow, 6).Value = "優先順位"
+        .Cells(outputRow, 7).Value = "備考"
+        .Cells(outputRow, 8).Value = "搭載関数ID"
+        .Cells(outputRow, 9).Value = "搭載関数名"
     End With
     outputRow = 2
 
@@ -75,8 +75,11 @@ Private Sub ProcessFolder(fso As Object, folder As Object, _
     Dim subFolder As Object
     Dim file      As Object
     Dim normalizedTarget As String
+    Dim ignoreFolders As Variant
+    Dim ignoreName As String
 
     normalizedTarget = NormalizeFileName(srcFileName)
+    ignoreFolders = Array(".svn")
 
     For Each file In folder.Files
         If Left(file.Name, 1) <> "~" Then
@@ -87,10 +90,32 @@ Private Sub ProcessFolder(fso As Object, folder As Object, _
     Next file
 
     For Each subFolder In folder.SubFolders
-        Call ProcessFolder(fso, subFolder, srcFileName, srcSheetName, wsTarget, outputRow)
+        ignoreName = NormalizeFolderName(subFolder.Name)
+        If Not IsIgnoredFolder(ignoreName, ignoreFolders) Then
+            Call ProcessFolder(fso, subFolder, srcFileName, srcSheetName, wsTarget, outputRow)
+        End If
     Next subFolder
 
 End Sub
+
+Private Function NormalizeFolderName(ByVal folderName As String) As String
+
+    NormalizeFolderName = LCase$(Trim$(folderName))
+
+End Function
+
+Private Function IsIgnoredFolder(ByVal folderName As String, ByVal ignoreFolders As Variant) As Boolean
+
+    Dim i As Long
+
+    For i = LBound(ignoreFolders) To UBound(ignoreFolders)
+        If folderName = NormalizeFolderName(CStr(ignoreFolders(i))) Then
+            IsIgnoredFolder = True
+            Exit Function
+        End If
+    Next i
+
+End Function
 
 Private Function NormalizeFileName(ByVal fileName As String) As String
 
@@ -219,13 +244,13 @@ Private Sub BuildSummarySheet(wsDetail As Worksheet)
     ' ---- ヘッダー ----
     outRow = 1
     With wsSummary
-        .Cells(outRow, 1).Value = "XXXXXXXXX"
-        .Cells(outRow, 2).Value = "XXXXXXXXX"
-        .Cells(outRow, 3).Value = "XXXXXXXXX"
-        .Cells(outRow, 4).Value = "XXXXXXXXX"
-        .Cells(outRow, 5).Value = "XXXXXXXXX"
-        .Cells(outRow, 6).Value = "XXXXXXXXX"
-        .Cells(outRow, 7).Value = "XXXXXXXXX"
+        .Cells(outRow, 1).Value = "ソフトウェアユニット仕様ID"
+        .Cells(outRow, 2).Value = "ソフトウェアユニット仕様名"
+        .Cells(outRow, 3).Value = "仕様status"
+        .Cells(outRow, 4).Value = "関数数"
+        .Cells(outRow, 5).Value = "関数仕様ID一覧"
+        .Cells(outRow, 6).Value = "関数仕様名一覧"
+        .Cells(outRow, 7).Value = "搭載関数名一覧"
     End With
     outRow = 2
 

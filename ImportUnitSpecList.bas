@@ -1,5 +1,66 @@
 Option Explicit
 
+' ----------------------------------------------------------
+' 「ID一覧」シートを外部ファイルからコピーして更新する
+' ----------------------------------------------------------
+Public Sub UpdateIDList()
+
+    Const ID_LIST_SHEET As String = "ID一覧"
+    Const SRC_FILE_PATH As String = "XXX"   ' コピー元ファイルパスをここに設定
+
+    Dim fso As Object
+    Set fso = CreateObject("Scripting.FileSystemObject")
+
+    If Not fso.FileExists(SRC_FILE_PATH) Then
+        MsgBox "コピー元ファイルが見つかりません:" & vbCrLf & SRC_FILE_PATH, vbCritical
+        Exit Sub
+    End If
+
+    Application.ScreenUpdating = False
+    Application.DisplayAlerts = False
+
+    ' ---- 既存の「ID一覧」シートを削除 ----
+    Dim ws As Worksheet
+    For Each ws In ThisWorkbook.Worksheets
+        If ws.Name = ID_LIST_SHEET Then
+            ws.Delete
+            Exit For
+        End If
+    Next ws
+
+    ' ---- コピー元ファイルを開いてシートをコピー ----
+    Dim wbSrc As Workbook
+    Set wbSrc = Workbooks.Open(SRC_FILE_PATH, ReadOnly:=True, UpdateLinks:=False)
+
+    Dim wsSrc As Worksheet
+    Set wsSrc = Nothing
+    For Each ws In wbSrc.Worksheets
+        If ws.Name = ID_LIST_SHEET Then
+            Set wsSrc = ws
+            Exit For
+        End If
+    Next ws
+
+    If wsSrc Is Nothing Then
+        wbSrc.Close SaveChanges:=False
+        Application.DisplayAlerts = True
+        Application.ScreenUpdating = True
+        MsgBox "コピー元ファイルに「" & ID_LIST_SHEET & "」シートが見つかりません。", vbCritical
+        Exit Sub
+    End If
+
+    ' ---- tool.xlsm の末尾にコピー ----
+    wsSrc.Copy After:=ThisWorkbook.Worksheets(ThisWorkbook.Worksheets.Count)
+
+    wbSrc.Close SaveChanges:=False
+
+    Application.DisplayAlerts = True
+    Application.ScreenUpdating = True
+
+    MsgBox "「" & ID_LIST_SHEET & "」シートを更新しました。", vbInformation
+
+End Sub
+
 Public Sub ImportUnitSpecList()
 
     Const TARGET_SHEET  As String = "ユニット仕様一覧"

@@ -331,14 +331,16 @@ Private Sub BuildSpecSheet(wsDetail As Worksheet)
 
     ' ---- タイトル行 ----
     With wsSpec
-        .Cells(1, 1).Value = "機能名"
-        .Cells(1, 2).Value = "ソフトウェアユニット仕様ID"
-        .Cells(1, 3).Value = "ソフトウェアユニット仕様"
-        .Cells(1, 4).Value = "関数名"
+        .Cells(1, 1).Value = "コンポーネントID"
+        .Cells(1, 2).Value = "コンポーネント名"
+        .Cells(1, 3).Value = "機能名"
+        .Cells(1, 4).Value = "ソフトウェアユニット仕様ID"
+        .Cells(1, 5).Value = "ソフトウェアユニット仕様"
+        .Cells(1, 6).Value = "関数名"
     End With
 
     ' ---- ユニット仕様一覧を配列に読み込み ----
-    ' col6 = ソフトウェアユニット仕様ID, col7 = ソフトウェアユニット仕様
+    ' col1=参照元識別子, col2=コンポーネント仕様ID, col6=ユニット仕様ID, col7=ユニット仕様
     Dim detLastRow As Long
     detLastRow = wsDetail.Cells(wsDetail.Rows.Count, 6).End(xlUp).Row
     If detLastRow < 2 Then Exit Sub
@@ -361,9 +363,11 @@ Private Sub BuildSpecSheet(wsDetail As Worksheet)
     totalRows = UBound(detArr, 1)
 
     Dim outArr() As Variant
-    ReDim outArr(1 To totalRows, 1 To 4)
+    ReDim outArr(1 To totalRows, 1 To 6)
 
     Dim i As Long, j As Long
+    Dim compName    As String   ' ユニット仕様一覧 A列（参照元識別子）
+    Dim compID      As String   ' ユニット仕様一覧 B列（コンポーネント仕様ID）
     Dim unitID      As String
     Dim unitSpec    As String
     Dim featureName As String
@@ -372,6 +376,8 @@ Private Sub BuildSpecSheet(wsDetail As Worksheet)
     Dim idD         As String
 
     For i = 1 To totalRows
+        compName = Trim(CStr(detArr(i, 1)))   ' ユニット仕様一覧 A列（参照元識別子）
+        compID   = Trim(CStr(detArr(i, 2)))   ' ユニット仕様一覧 B列（コンポーネント仕様ID）
         unitID   = Trim(CStr(detArr(i, 6)))   ' ユニット仕様一覧 F列
         unitSpec = Trim(CStr(detArr(i, 7)))   ' ユニット仕様一覧 G列
         featureName = ""
@@ -381,8 +387,8 @@ Private Sub BuildSpecSheet(wsDetail As Worksheet)
             idA = Trim(CStr(idArr(j, 1)))   ' ID一覧 A列
             idD = Trim(CStr(idArr(j, 4)))   ' ID一覧 D列
 
-            ' 機能名: A列が一致する最初の行から取得
-            If featureName = "" And idA = unitID Then
+            ' 機能名: A列とD列が両方一致する最初の行から取得
+            If featureName = "" And idA = unitID And idD = unitSpec Then
                 featureName = Trim(CStr(idArr(j, 3)))   ' ID一覧 C列
             End If
 
@@ -394,17 +400,19 @@ Private Sub BuildSpecSheet(wsDetail As Worksheet)
             If featureName <> "" And funcName <> "" Then Exit For
         Next j
 
-        outArr(i, 1) = featureName   ' 仕様 A列 = 機能名
-        outArr(i, 2) = unitID        ' 仕様 B列 = ソフトウェアユニット仕様ID
-        outArr(i, 3) = unitSpec      ' 仕様 C列 = ソフトウェアユニット仕様
-        outArr(i, 4) = funcName      ' 仕様 D列 = 関数名
+        outArr(i, 1) = compID       ' 仕様 A列 = コンポーネントID
+        outArr(i, 2) = compName     ' 仕様 B列 = コンポーネント名（参照元識別子）
+        outArr(i, 3) = featureName  ' 仕様 C列 = 機能名
+        outArr(i, 4) = unitID       ' 仕様 D列 = ソフトウェアユニット仕様ID
+        outArr(i, 5) = unitSpec     ' 仕様 E列 = ソフトウェアユニット仕様
+        outArr(i, 6) = funcName     ' 仕様 F列 = 関数名
     Next i
 
     ' ---- 一括書き込み（2行目から）----
-    wsSpec.Range(wsSpec.Cells(2, 1), wsSpec.Cells(1 + totalRows, 4)).Value = outArr
+    wsSpec.Range(wsSpec.Cells(2, 1), wsSpec.Cells(1 + totalRows, 6)).Value = outArr
 
     ' ---- 列幅自動調整 ----
-    wsSpec.Columns("A:D").AutoFit
+    wsSpec.Columns("A:F").AutoFit
 
 End Sub
 

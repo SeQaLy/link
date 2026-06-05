@@ -7,6 +7,7 @@ Public Sub UpdateIDList()
 
     Const ID_LIST_SHEET As String = "ID一覧"
     Const SRC_FILE_PATH As String = "XXX"   ' コピー元ファイルパスをここに設定
+    Const INSERT_AFTER_SHEET As String = "現設計➡"
 
     Dim fso As Object
     Set fso = CreateObject("Scripting.FileSystemObject")
@@ -49,8 +50,25 @@ Public Sub UpdateIDList()
         Exit Sub
     End If
 
-    ' ---- tool.xlsm の末尾にコピー ----
-    wsSrc.Copy After:=ThisWorkbook.Worksheets(ThisWorkbook.Worksheets.Count)
+    ' ---- 「現設計➡」シートの右側にコピー ----
+    Dim wsInsertAfter As Worksheet
+    Set wsInsertAfter = Nothing
+    For Each ws In ThisWorkbook.Worksheets
+        If ws.Name = INSERT_AFTER_SHEET Then
+            Set wsInsertAfter = ws
+            Exit For
+        End If
+    Next ws
+
+    If wsInsertAfter Is Nothing Then
+        wbSrc.Close SaveChanges:=False
+        Application.DisplayAlerts = True
+        Application.ScreenUpdating = True
+        MsgBox "挿入先シート「" & INSERT_AFTER_SHEET & "」が見つかりません。", vbCritical
+        Exit Sub
+    End If
+
+    wsSrc.Copy After:=wsInsertAfter
 
     wbSrc.Close SaveChanges:=False
 

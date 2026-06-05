@@ -93,8 +93,35 @@ Public Sub ImportUnitSpecList()
 
     ' ---- 詳細シートの書式設定 ----
     Call FormatDetailSheet(wsTarget, outputRow - 1)
-    
+
     MsgBox "インポート完了。" & (outputRow - 2) & " 件の関数仕様を書き込みました。", vbInformation
+
+End Sub
+
+' ボタンから呼び出す用エントリーポイント
+Public Sub CreateSpecSheet()
+
+    Const UNIT_LIST_SHEET As String = "ユニット仕様一覧"
+
+    Dim wsDetail As Worksheet
+    Dim ws       As Worksheet
+
+    Set wsDetail = Nothing
+    For Each ws In ThisWorkbook.Worksheets
+        If ws.Name = UNIT_LIST_SHEET Then
+            Set wsDetail = ws
+            Exit For
+        End If
+    Next ws
+
+    If wsDetail Is Nothing Then
+        MsgBox "「" & UNIT_LIST_SHEET & "」シートが見つかりません。先にインポートを実行してください。", vbCritical
+        Exit Sub
+    End If
+
+    Call BuildSpecSheet(wsDetail)
+
+    MsgBox "「仕様」シートの生成が完了しました。", vbInformation
 
 End Sub
 
@@ -249,6 +276,135 @@ Private Sub ReadMainFile(filePath As String, srcSheetName As String, _
             allRows.Add rowArr
         End If
     Next i
+
+End Sub
+
+' ----------------------------------------------------------
+' 「仕様」シートを「ユニット仕様一覧」と「ID一覧」から生成する
+'
+' 出力列:
+'   A: 機能名         (ID一覧 C列 ← ID一覧 A列 = ユニット仕様一覧 F列)
+'   B: ソフトウェアユニット仕様ID   (ユニット仕様一覧 F列)
+'   C: ソフトウェアユニット仕様     (ユニット仕様一覧 G列)
+'   D: 関数名         (ID一覧 I列 ← ID一覧 A列 = B列 AND ID一覧 D列 = C列)
+' ----------------------------------------------------------
+Private Sub BuildSpecSheet(wsDetail As Worksheet)
+
+    Const SPEC_SHEET    As String = "仕様"
+    Const ID_LIST_SHEET As String = "ID一覧"
+    Const ID_HEADER_ROW As Long   = 6  ' ID一覧のヘッダー行
+
+    Dim wsSpec   As Worksheet
+    Dim wsIDList As Worksheet
+    Dim ws       As Worksheet
+
+    ' ---- 仕様シートの取得 ----
+    Set wsSpec = Nothing
+    For Each ws In ThisWorkbook.Worksheets
+        If ws.Name = SPEC_SHEET Then
+            Set wsSpec = ws
+            Exit For
+        End If
+    Next ws
+
+    If wsSpec Is Nothing Then
+        MsgBox "「仕様」シートが見つかりません。", vbCritical
+        Exit Sub
+    End If
+
+    ' ---- ID一覧シートの取得 ----
+    Set wsIDList = Nothing
+    For Each ws In ThisWorkbook.Worksheets
+        If ws.Name = ID_LIST_SHEET Then
+            Set wsIDList = ws
+            Exit For
+        End If
+    Next ws
+
+    If wsIDList Is Nothing Then
+        MsgBox "「ID一覧」シートが見つかりません。", vbCritical
+        Exit Sub
+    End If
+
+    ' ---- 仕様シートのクリア ----
+    wsSpec.Cells.Clear
+
+    ' ---- タイトル行 ----
+    With wsSpec
+        .Cells(1, 1).Value = "機能名"
+        .Cells(1, 2).Value = "ソフトウェアユニット仕様ID"
+        .Cells(1, 3).Value = "ソフトウェアユニット仕様"
+        .Cells(1, 4).Value = "関数名"
+    End With
+
+    ' ---- ユニット仕様一覧を配列に読み込み ----
+    ' col6 = ソフトウェアユニット仕様ID, col7 = ソフトウェアユニット仕様
+    Dim detLastRow As Long
+    detLastRow = wsDetail.Cells(wsDetail.Rows.Count, 6).End(xlUp).Row
+    If detLastRow < 2 Then Exit Sub
+
+    Dim detArr As Variant
+    detArr = wsDetail.Range(wsDetail.Cells(2, 1), wsDetail.Cells(detLastRow, 11)).Value
+
+    ' ---- ID一覧を配列に読み込み（ヘッダー行の次行から）----
+    ' col1=ソフトウェアユニット仕様ID, col3=機能名, col4=ソフトウェアユニット仕様, col9=関数名
+    Dim idLastRow As Long
+    idLastRow = wsIDList.Cells(wsIDList.Rows.Count, 1).End(xlUp).Row
+    If idLastRow <= ID_HEADER_ROW Then Exit Sub
+
+    Dim idArr As Variant
+    idArr = wsIDList.Range(wsIDList.Cells(ID_HEADER_ROW + 1, 1), _
+                           wsIDList.Cells(idLastRow, 9)).Value
+
+    ' ---- 出力配列の構築 ----
+    Dim totalRows As Long
+    totalRows = UBound(detArr, 1)
+
+    Dim outArr() As Variant
+    ReDim outArr(1 To totalRows, 1 To 4)
+
+    Dim i As Long, j As Long
+    Dim unitID      As String
+    Dim unitSpec    As String
+    Dim featureName As String
+    Dim funcName    As String
+    Dim idA         As String
+    Dim idD         As String
+
+    For i = 1 To totalRows
+        unitID   = Trim(CStr(detArr(i, 6)))   ' ユニット仕様一覧 F列
+        unitSpec = Trim(CStr(detArr(i, 7)))   ' ユニット仕様一覧 G列
+        featureName = ""
+        funcName    = ""
+
+        For j = 1 To UBound(idArr, 1)
+            idA = Trim(CStr(idArr(j, 1)))   ' ID一覧 A列
+            idD = Trim(CStr(idArr(j, 4)))   ' ID一覧 D列
+
+            ' 機能名: A列が一致する最初の行から取得
+            If featureName = "" And idA = unitID Then
+                featureName = Trim(CStr(idArr(j, 3)))   ' ID一覧 C列
+            End If
+
+            ' 関数名: A列とD列が両方一致する行から取得
+            If funcName = "" And idA = unitID And idD = unitSpec Then
+                funcName = Trim(CStr(idArr(j, 9)))      ' ID一覧 I列
+            End If
+
+            If featureName <> "" And funcName <> "" Then Exit For
+        Next j
+
+        outArr(i, 1) = featureName   ' 仕様 A列 = 機能名
+        outArr(i, 2) = unitID        ' 仕様 B列 = ソフトウェアユニット仕様ID
+        outArr(i, 3) = unitSpec      ' 仕様 C列 = ソフトウェアユニット仕様
+        outArr(i, 4) = funcName      ' 仕様 D列 = 関数名
+    Next i
+
+    ' ---- 一括書き込み（2行目から）----
+    wsSpec.Range(wsSpec.Cells(2, 1), wsSpec.Cells(1 + totalRows, 4)).Value = outArr
+
+    ' ---- 列幅自動調整 ----
+    wsSpec.Columns("A:D").AutoFit
 
 End Sub
 

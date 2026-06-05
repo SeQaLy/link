@@ -120,8 +120,197 @@ Public Sub CreateSpecSheet()
     End If
 
     Call BuildSpecSheet(wsDetail)
+    Call BuildProgressSheet
 
     MsgBox "「仕様」シートの生成が完了しました。", vbInformation
+
+End Sub
+
+' ----------------------------------------------------------
+' 「サマリー」シートを先頭に作成し、仕様シートの関数紐づけ進捗を集計する
+' 集計列: コンポーネント名 / ユニット仕様数 / 紐づけ済 / 未紐づけ / 進捗率 / 進捗バー
+' ----------------------------------------------------------
+Private Sub BuildProgressSheet()
+
+    Const SUMMARY_SHEET As String = "サマリー"
+    Const SPEC_SHEET    As String = "仕様"
+    Const BAR_MAX       As Integer = 20   ' 進捗バーの最大ブロック数
+
+    Dim wsSum  As Worksheet
+    Dim wsSpec As Worksheet
+    Dim ws     As Worksheet
+
+    ' ---- 仕様シートの取得 ----
+    Set wsSpec = Nothing
+    For Each ws In ThisWorkbook.Worksheets
+        If ws.Name = SPEC_SHEET Then
+            Set wsSpec = ws
+            Exit For
+        End If
+    Next ws
+
+    If wsSpec Is Nothing Then
+        MsgBox "「仕様」シートが見つかりません。", vbCritical
+        Exit Sub
+    End If
+
+    ' ---- サマリーシートの準備（先頭に配置）----
+    Set wsSum = Nothing
+    For Each ws In ThisWorkbook.Worksheets
+        If ws.Name = SUMMARY_SHEET Then
+            Set wsSum = ws
+            Exit For
+        End If
+    Next ws
+
+    If wsSum Is Nothing Then
+        Set wsSum = ThisWorkbook.Worksheets.Add(Before:=ThisWorkbook.Worksheets(1))
+        wsSum.Name = SUMMARY_SHEET
+    Else
+        wsSum.Cells.Clear
+        ' 先頭でなければ移動
+        If wsSum.Index <> 1 Then
+            wsSum.Move Before:=ThisWorkbook.Worksheets(1)
+        End If
+    End If
+
+    ' ---- 仕様シートを配列に読み込み（2行目以降: A=コンポ名, E=関数名）----
+    Dim specLastRow As Long
+    specLastRow = wsSpec.Cells(wsSpec.Rows.Count, 3).End(xlUp).Row
+    If specLastRow < 2 Then Exit Sub
+
+    Dim specArr As Variant
+    specArr = wsSpec.Range(wsSpec.Cells(2, 1), wsSpec.Cells(specLastRow, 5)).Value
+
+    ' ---- コンポーネント名ごとに集計（Dictionary使用）----
+    Dim dic     As Object
+    Dim dicOrd  As Object   ' 出現順を保持
+    Set dic    = CreateObject("Scripting.Dictionary")
+    Set dicOrd = CreateObject("Scripting.Dictionary")
+
+    Dim i       As Long
+    Dim compNm  As String
+    Dim funcNm  As String
+    Dim ordIdx  As Long
+    ordIdx = 0
+
+    For i = 1 To UBound(specArr, 1)
+        compNm = Trim(CStr(specArr(i, 1)))   ' A列 = コンポーネント名
+        funcNm = Trim(CStr(specArr(i, 5)))   ' E列 = 関数名
+
+        If Not dic.Exists(compNm) Then
+            dic.Add compNm, Array(0, 0)   ' (総数, 紐づけ済)
+            dicOrd.Add ordIdx, compNm
+            ordIdx = ordIdx + 1
+        End If
+
+        Dim arr As Variant
+        arr = dic(compNm)
+        arr(0) = arr(0) + 1
+        If funcNm <> "" Then arr(1) = arr(1) + 1
+        dic(compNm) = arr
+    Next i
+
+    ' ---- タイトル行 ----
+    With wsSum
+        .Cells(1, 1).Value = "コンポーネント名"
+        .Cells(1, 2).Value = "ユニット仕様数"
+        .Cells(1, 3).Value = "紐づけ済"
+        .Cells(1, 4).Value = "未紐づけ"
+        .Cells(1, 5).Value = "進捗率"
+        .Cells(1, 6).Value = "進捗バー"
+    End With
+
+    ' ---- コンポーネントごとの行 ----
+    Dim outRow As Long
+    outRow = 2
+    Dim k       As Long
+    Dim total   As Long
+    Dim done    As Long
+    Dim pct     As Double
+    Dim bars    As Integer
+
+    For k = 0 To dicOrd.Count - 1
+        compNm = dicOrd(k)
+        arr    = dic(compNm)
+        total  = arr(0)
+        done   = arr(1)
+        pct    = IIf(total > 0, done / total, 0)
+        bars   = Int(pct * BAR_MAX)
+
+        With wsSum
+            .Cells(outRow, 1).Value = compNm
+            .Cells(outRow, 2).Value = total
+            .Cells(outRow, 3).Value = done
+            .Cells(outRow, 4).Value = total - done
+            .Cells(outRow, 5).Value = pct
+            .Cells(outRow, 5).NumberFormat = "0.0%"
+            .Cells(outRow, 6).Value = String(bars, ChrW(&H25A0)) & String(BAR_MAX - bars, ChrW(&H25A1))
+        End With
+
+        ' 進捗率に応じた色付け
+        Dim pctCell As Range
+        Set pctCell = wsSum.Cells(outRow, 5)
+        If pct >= 1 Then
+            pctCell.Interior.Color = RGB(84, 180, 84)    ' 緑（完了）
+            pctCell.Font.Color = RGB(255, 255, 255)
+        ElseIf pct >= 0.5 Then
+            pctCell.Interior.Color = RGB(255, 192, 0)    ' 黄（途中）
+            pctCell.Font.Color = RGB(0, 0, 0)
+        Else
+            pctCell.Interior.Color = RGB(220, 80, 80)    ' 赤（低進捗）
+            pctCell.Font.Color = RGB(255, 255, 255)
+        End If
+
+        outRow = outRow + 1
+    Next k
+
+    ' ---- 合計行 ----
+    Dim grandTotal As Long
+    Dim grandDone  As Long
+    For k = 0 To dicOrd.Count - 1
+        arr = dic(dicOrd(k))
+        grandTotal = grandTotal + arr(0)
+        grandDone  = grandDone  + arr(1)
+    Next k
+
+    Dim grandPct As Double
+    grandPct = IIf(grandTotal > 0, grandDone / grandTotal, 0)
+    bars = Int(grandPct * BAR_MAX)
+
+    With wsSum
+        .Cells(outRow, 1).Value = "【合計】"
+        .Cells(outRow, 2).Value = grandTotal
+        .Cells(outRow, 3).Value = grandDone
+        .Cells(outRow, 4).Value = grandTotal - grandDone
+        .Cells(outRow, 5).Value = grandPct
+        .Cells(outRow, 5).NumberFormat = "0.0%"
+        .Cells(outRow, 6).Value = String(bars, ChrW(&H25A0)) & String(BAR_MAX - bars, ChrW(&H25A1))
+
+        ' 合計行の背景
+        .Range(.Cells(outRow, 1), .Cells(outRow, 6)).Interior.Color = RGB(30, 80, 160)
+        .Range(.Cells(outRow, 1), .Cells(outRow, 6)).Font.Color = RGB(255, 255, 255)
+        .Range(.Cells(outRow, 1), .Cells(outRow, 6)).Font.Bold = True
+        .Cells(outRow, 5).Interior.Color = RGB(30, 80, 160)
+    End With
+
+    ' ---- ヘッダー書式 ----
+    With wsSum.Range(wsSum.Cells(1, 1), wsSum.Cells(1, 6))
+        .Interior.Color = RGB(0, 112, 192)
+        .Font.Color = RGB(255, 255, 255)
+        .Font.Bold = True
+    End With
+
+    ' ---- 罫線 ----
+    With wsSum.Range(wsSum.Cells(1, 1), wsSum.Cells(outRow, 6)).Borders
+        .LineStyle = xlContinuous
+        .Weight = xlThin
+        .Color = RGB(180, 180, 180)
+    End With
+
+    ' ---- 列幅 ----
+    wsSum.Columns("A:F").AutoFit
+    wsSum.Columns("F").ColumnWidth = BAR_MAX + 4
 
 End Sub
 
@@ -331,12 +520,11 @@ Private Sub BuildSpecSheet(wsDetail As Worksheet)
 
     ' ---- タイトル行 ----
     With wsSpec
-        .Cells(1, 1).Value = "コンポーネントID"
-        .Cells(1, 2).Value = "コンポーネント名"
-        .Cells(1, 3).Value = "機能名"
-        .Cells(1, 4).Value = "ソフトウェアユニット仕様ID"
-        .Cells(1, 5).Value = "ソフトウェアユニット仕様"
-        .Cells(1, 6).Value = "関数名"
+        .Cells(1, 1).Value = "コンポーネント名"
+        .Cells(1, 2).Value = "機能名"
+        .Cells(1, 3).Value = "ソフトウェアユニット仕様ID"
+        .Cells(1, 4).Value = "ソフトウェアユニット仕様"
+        .Cells(1, 5).Value = "関数名"
     End With
 
     ' ---- ユニット仕様一覧を配列に読み込み ----
@@ -363,7 +551,7 @@ Private Sub BuildSpecSheet(wsDetail As Worksheet)
     totalRows = UBound(detArr, 1)
 
     Dim outArr() As Variant
-    ReDim outArr(1 To totalRows, 1 To 6)
+    ReDim outArr(1 To totalRows, 1 To 5)
 
     Dim i As Long, j As Long
     Dim compName    As String   ' ユニット仕様一覧 A列（参照元識別子）
@@ -400,19 +588,18 @@ Private Sub BuildSpecSheet(wsDetail As Worksheet)
             If featureName <> "" And funcName <> "" Then Exit For
         Next j
 
-        outArr(i, 1) = compID       ' 仕様 A列 = コンポーネントID
-        outArr(i, 2) = compName     ' 仕様 B列 = コンポーネント名（参照元識別子）
-        outArr(i, 3) = featureName  ' 仕様 C列 = 機能名
-        outArr(i, 4) = unitID       ' 仕様 D列 = ソフトウェアユニット仕様ID
-        outArr(i, 5) = unitSpec     ' 仕様 E列 = ソフトウェアユニット仕様
-        outArr(i, 6) = funcName     ' 仕様 F列 = 関数名
+        outArr(i, 1) = compName     ' 仕様 A列 = コンポーネント名（参照元識別子）
+        outArr(i, 2) = featureName  ' 仕様 B列 = 機能名
+        outArr(i, 3) = unitID       ' 仕様 C列 = ソフトウェアユニット仕様ID
+        outArr(i, 4) = unitSpec     ' 仕様 D列 = ソフトウェアユニット仕様
+        outArr(i, 5) = funcName     ' 仕様 E列 = 関数名
     Next i
 
     ' ---- 一括書き込み（2行目から）----
-    wsSpec.Range(wsSpec.Cells(2, 1), wsSpec.Cells(1 + totalRows, 6)).Value = outArr
+    wsSpec.Range(wsSpec.Cells(2, 1), wsSpec.Cells(1 + totalRows, 5)).Value = outArr
 
     ' ---- 列幅自動調整 ----
-    wsSpec.Columns("A:F").AutoFit
+    wsSpec.Columns("A:E").AutoFit
 
 End Sub
 

@@ -56,12 +56,32 @@ Public Sub ImportUnitSpecList()
     End With
     outputRow = 2
 
-    ' ---- フォルダ再帰処理 ----
+    ' ---- フォルダ再帰処理（全データをCollectionに収集）----
     Application.ScreenUpdating = False
     Application.DisplayAlerts = False
 
+    Dim allRows As Collection
+    Set allRows = New Collection
     Call ProcessFolder(fso, fso.GetFolder(unitListFolder), _
-                       SRC_FILENAME, SRC_SHEET, wsTarget, outputRow)
+                       SRC_FILENAME, SRC_SHEET, allRows)
+
+    ' ---- 一括書き込み ----
+    If allRows.Count > 0 Then
+        Dim dataArr() As Variant
+        ReDim dataArr(1 To allRows.Count, 1 To 11)
+        Dim r As Long
+        For r = 1 To allRows.Count
+            Dim rowArr As Variant
+            rowArr = allRows(r)
+            Dim c As Long
+            For c = 1 To 11
+                dataArr(r, c) = rowArr(c)
+            Next c
+        Next r
+        wsTarget.Range(wsTarget.Cells(2, 1), _
+                       wsTarget.Cells(1 + allRows.Count, 11)).Value = dataArr
+        outputRow = 2 + allRows.Count
+    End If
 
     Application.DisplayAlerts = True
     Application.ScreenUpdating = True
@@ -77,7 +97,7 @@ End Sub
 
 Private Sub ProcessFolder(fso As Object, folder As Object, _
                           srcFileName As String, srcSheetName As String, _
-                          wsTarget As Worksheet, ByRef outputRow As Long)
+                          allRows As Collection)
 
     Dim subFolder As Object
     Dim file      As Object
@@ -92,7 +112,7 @@ Private Sub ProcessFolder(fso As Object, folder As Object, _
         If Left(file.Name, 1) <> "~" Then
             ' プレフィックス前方一致でマッチ
             If Left(NormalizeFileName(file.Name), Len(normalizedTarget)) = normalizedTarget Then
-                Call ReadMainFile(file.Path, srcSheetName, wsTarget, outputRow)
+                Call ReadMainFile(file.Path, srcSheetName, allRows)
             End If
         End If
     Next file
@@ -103,7 +123,7 @@ Private Sub ProcessFolder(fso As Object, folder As Object, _
             ' アクセス不可フォルダ（シンボリックリンク等）をスキップ
             If fso.FolderExists(subFolder.Path) Then
                 On Error Resume Next
-                Call ProcessFolder(fso, subFolder, srcFileName, srcSheetName, wsTarget, outputRow)
+                Call ProcessFolder(fso, subFolder, srcFileName, srcSheetName, allRows)
                 On Error GoTo 0
             End If
         End If
@@ -152,7 +172,7 @@ Private Function NormalizeFileName(ByVal fileName As String) As String
 End Function
 
 Private Sub ReadMainFile(filePath As String, srcSheetName As String, _
-                          wsTarget As Worksheet, ByRef outputRow As Long)
+                          allRows As Collection)
 
     Dim wbSrc   As Workbook
     Dim wsSrc   As Worksheet
@@ -196,21 +216,28 @@ Private Sub ReadMainFile(filePath As String, srcSheetName As String, _
     ' 行1 = ヘッダー、行2以降がデータ（フラット構造）
     lastRow = wsSrc.Cells(wsSrc.Rows.Count, 1).End(xlUp).Row
 
-    For i = 2 To lastRow
-        ' ソフトウェアユニット仕様ID(E列=5)が空の行はスキップ
-        If Trim(CStr(wsSrc.Cells(i, 5).Value)) <> "" Then
-            ' col1: 可変部分(XXXX)
-            wsTarget.Cells(outputRow, 1).Value = fileIdent
-            ' col2〜11: ソースの10列をそのままコピー
-            For col = 1 To 10
-                wsTarget.Cells(outputRow, col + 1).Value = _
-                    Trim(CStr(wsSrc.Cells(i, col).Value))
-            Next col
-            outputRow = outputRow + 1
-        End If
-    Next i
+    ' ソース全データを一括で配列に読み込む
+    Dim srcArr As Variant
+    If lastRow >= 2 Then
+        srcArr = wsSrc.Range(wsSrc.Cells(2, 1), wsSrc.Cells(lastRow, 10)).Value
+    End If
 
     wbSrc.Close SaveChanges:=False
+
+    If IsEmpty(srcArr) Then Exit Sub
+    If Not IsArray(srcArr) Then Exit Sub
+
+    For i = 1 To UBound(srcArr, 1)
+        ' ソフトウェアユニット仕様ID(E列=srcArr列5)が空の行はスキップ
+        If Trim(CStr(srcArr(i, 5))) <> "" Then
+            Dim rowArr(1 To 11) As Variant
+            rowArr(1) = fileIdent
+            For col = 1 To 10
+                rowArr(col + 1) = Trim(CStr(srcArr(i, col)))
+            Next col
+            allRows.Add rowArr
+        End If
+    Next i
 
 End Sub
 

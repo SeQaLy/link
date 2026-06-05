@@ -577,10 +577,12 @@ End Sub
 Private Sub BuildSpecSheet(wsDetail As Worksheet)
 
     Const SPEC_SHEET    As String = "仕様"
+    Const FUNC_SHEET    As String = "関数"
     Const ID_LIST_SHEET As String = "ID一覧"
     Const ID_HEADER_ROW As Long   = 6  ' ID一覧のヘッダー行
 
     Dim wsSpec   As Worksheet
+    Dim wsFunc   As Worksheet
     Dim wsIDList As Worksheet
     Dim ws       As Worksheet
 
@@ -612,8 +614,26 @@ Private Sub BuildSpecSheet(wsDetail As Worksheet)
         Exit Sub
     End If
 
+    ' ---- 関数シートの取得 ----
+    Set wsFunc = Nothing
+    For Each ws In ThisWorkbook.Worksheets
+        If ws.Name = FUNC_SHEET Then
+            Set wsFunc = ws
+            Exit For
+        End If
+    Next ws
+
     ' ---- 仕様シートのクリア ----
     wsSpec.Cells.Clear
+
+    ' ---- 関数シートの2行目以降をクリア ----
+    If Not wsFunc Is Nothing Then
+        Dim funcLastRow As Long
+        funcLastRow = wsFunc.Cells(wsFunc.Rows.Count, 2).End(xlUp).Row
+        If funcLastRow >= 2 Then
+            wsFunc.Rows("2:" & funcLastRow).Delete
+        End If
+    End If
 
     ' ---- タイトル行 ----
     With wsSpec
@@ -672,17 +692,23 @@ Private Sub BuildSpecSheet(wsDetail As Worksheet)
             idA = Trim(CStr(idArr(j, 1)))   ' ID一覧 A列
             idD = Trim(CStr(idArr(j, 4)))   ' ID一覧 D列
 
-            ' 機能名: A列とD列が両方一致する最初の行から取得
-            If featureName = "" And idA = unitID And idD = unitSpec Then
-                featureName = Trim(CStr(idArr(j, 3)))   ' ID一覧 C列
-            End If
+            If idA = unitID And idD = unitSpec Then
+                ' 機能名: 最初の一致行から取得
+                If featureName = "" Then
+                    featureName = Trim(CStr(idArr(j, 3)))   ' ID一覧 C列
+                End If
 
-            ' 関数名: A列とD列が両方一致する行から取得
-            If funcName = "" And idA = unitID And idD = unitSpec Then
-                funcName = Trim(CStr(idArr(j, 9)))      ' ID一覧 I列
+                ' 関数名: 一致する全行を改行で結合
+                Dim fn As String
+                fn = Trim(CStr(idArr(j, 9)))   ' ID一覧 I列
+                If fn <> "" Then
+                    If funcName = "" Then
+                        funcName = fn
+                    Else
+                        funcName = funcName & Chr(10) & fn
+                    End If
+                End If
             End If
-
-            If featureName <> "" And funcName <> "" Then Exit For
         Next j
 
         outArr(i, 1) = compName     ' 仕様 A列 = コンポーネント名（参照元識別子）
@@ -695,8 +721,17 @@ Private Sub BuildSpecSheet(wsDetail As Worksheet)
     ' ---- 一括書き込み（2行目から）----
     wsSpec.Range(wsSpec.Cells(2, 1), wsSpec.Cells(1 + totalRows, 5)).Value = outArr
 
-    ' ---- 列幅自動調整 ----
+    ' ---- 関数シートへ書き込み（B列から、2行目以降）----
+    If Not wsFunc Is Nothing Then
+        wsFunc.Range(wsFunc.Cells(2, 2), wsFunc.Cells(1 + totalRows, 6)).Value = outArr
+    End If
+
+    ' ---- 列幅自動調整・折り返し（関数名列）----
     wsSpec.Columns("A:E").AutoFit
+    wsSpec.Columns("E").WrapText = True
+    If Not wsFunc Is Nothing Then
+        wsFunc.Columns("F").WrapText = True
+    End If
 
     ' ---- タイトル行の書式（A1:E1）----
     With wsSpec.Range("A1:E1")

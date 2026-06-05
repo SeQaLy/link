@@ -65,9 +65,12 @@ Public Sub ImportUnitSpecList()
     Set allRows = New Collection
     Dim ignoreFolders As Variant
     ignoreFolders = Array(".svn")
+    ' 重複読み込み防止用（正規化済みパスを記録）
+    Dim processedFiles As Object
+    Set processedFiles = CreateObject("Scripting.Dictionary")
     ' プレフィックスは拡張子除去不要のため NormalizePrefix を使う
     Call ProcessFolder(fso, fso.GetFolder(unitListFolder), _
-                       NormalizePrefix(SRC_FILENAME), SRC_SHEET, ignoreFolders, allRows)
+                       NormalizePrefix(SRC_FILENAME), SRC_SHEET, ignoreFolders, allRows, processedFiles)
 
     ' ---- 一括書き込み ----
     If allRows.Count > 0 Then
@@ -316,7 +319,8 @@ End Sub
 
 Private Sub ProcessFolder(fso As Object, folder As Object, _
                           normalizedTarget As String, srcSheetName As String, _
-                          ignoreFolders As Variant, allRows As Collection)
+                          ignoreFolders As Variant, allRows As Collection, _
+                          processedFiles As Object)
 
     Dim subFolder As Object
     Dim file      As Object
@@ -326,7 +330,13 @@ Private Sub ProcessFolder(fso As Object, folder As Object, _
             ' 拡張子が .xlsx であること、かつプレフィックス前方一致でマッチ
             If LCase$(Right$(file.Name, 5)) = ".xlsx" Then
                 If Left(NormalizePrefix(file.Name), Len(normalizedTarget)) = normalizedTarget Then
-                    Call ReadMainFile(file.Path, srcSheetName, allRows)
+                    ' 重複読み込みをスキップ
+                    Dim normalizedPath As String
+                    normalizedPath = LCase$(Trim$(file.Path))
+                    If Not processedFiles.Exists(normalizedPath) Then
+                        processedFiles.Add normalizedPath, True
+                        Call ReadMainFile(file.Path, srcSheetName, allRows)
+                    End If
                 End If
             End If
         End If
@@ -337,7 +347,7 @@ Private Sub ProcessFolder(fso As Object, folder As Object, _
             ' アクセス不可フォルダ（シンボリックリンク等）をスキップ
             If fso.FolderExists(subFolder.Path) Then
                 On Error Resume Next
-                Call ProcessFolder(fso, subFolder, normalizedTarget, srcSheetName, ignoreFolders, allRows)
+                Call ProcessFolder(fso, subFolder, normalizedTarget, srcSheetName, ignoreFolders, allRows, processedFiles)
                 On Error GoTo 0
             End If
         End If

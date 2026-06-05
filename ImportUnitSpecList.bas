@@ -3,8 +3,9 @@ Option Explicit
 Public Sub ImportUnitSpecList()
 
     Const TARGET_SHEET  As String = "ユニット仕様一覧"
-    Const SRC_SHEET     As String = "3.2.ユニット仕様一覧"
-    Const SRC_FILENAME  As String = "XXXXXX"
+    Const SRC_SHEET     As String = "ユニット仕様"
+    ' ファイル名はプレフィックスで前方一致マッチ
+    Const SRC_FILENAME  As String = "3.2_ソフトウェアユニット仕様一覧"
 
     Dim fso             As Object
     Dim unitListFolder  As String
@@ -37,18 +38,21 @@ Public Sub ImportUnitSpecList()
         wsTarget.Cells.Clear
     End If
 
-    ' ---- ヘッダー行 ----
+    ' ---- ヘッダー行（ソース「ユニット仕様」シートの列名に合わせる）----
+    ' A列: 参照ファイルの可変部分(XXXX)、B列以降: ソースの10列
     outputRow = 1
     With wsTarget
-        .Cells(outputRow, 1).Value = "ソフトウェアユニット仕様ID"
-        .Cells(outputRow, 2).Value = "ソフトウェアユニット仕様名"
-        .Cells(outputRow, 3).Value = "搭載関数ID"
-        .Cells(outputRow, 4).Value = "搭載関数名"
-        .Cells(outputRow, 5).Value = "関数仕様ID"
-        .Cells(outputRow, 6).Value = "関数仕様名"
-        .Cells(outputRow, 7).Value = "仕様status"
+        .Cells(outputRow, 1).Value = "参照元識別子"
+        .Cells(outputRow, 2).Value = "ソフトウェアコンポーネント仕様ID"
+        .Cells(outputRow, 3).Value = "更新No"
+        .Cells(outputRow, 4).Value = "変更内容"
+        .Cells(outputRow, 5).Value = "仕様"
+        .Cells(outputRow, 6).Value = "ソフトウェアユニット仕様ID"
+        .Cells(outputRow, 7).Value = "ソフトウェアユニット仕様"
         .Cells(outputRow, 8).Value = "優先順位"
         .Cells(outputRow, 9).Value = "備考"
+        .Cells(outputRow, 10).Value = "搭載ソフトウェアユニットID"
+        .Cells(outputRow, 11).Value = "搭載ソフトウェアユニット名称"
     End With
     outputRow = 2
 
@@ -61,6 +65,9 @@ Public Sub ImportUnitSpecList()
 
     Application.DisplayAlerts = True
     Application.ScreenUpdating = True
+
+    ' ---- 詳細シートの書式設定 ----
+    Call FormatDetailSheet(wsTarget, outputRow - 1)
 
     Call BuildSummarySheet(wsTarget)
 
@@ -83,7 +90,8 @@ Private Sub ProcessFolder(fso As Object, folder As Object, _
 
     For Each file In folder.Files
         If Left(file.Name, 1) <> "~" Then
-            If NormalizeFileName(file.Name) = normalizedTarget Then
+            ' プレフィックス前方一致でマッチ
+            If Left(NormalizeFileName(file.Name), Len(normalizedTarget)) = normalizedTarget Then
                 Call ReadMainFile(file.Path, srcSheetName, wsTarget, outputRow)
             End If
         End If
@@ -146,19 +154,32 @@ End Function
 Private Sub ReadMainFile(filePath As String, srcSheetName As String, _
                           wsTarget As Worksheet, ByRef outputRow As Long)
 
-    Dim wbSrc       As Workbook
-    Dim wsSrc       As Worksheet
-    Dim ws          As Worksheet
-    Dim lastRow     As Long
-    Dim i           As Long
+    Dim wbSrc   As Workbook
+    Dim wsSrc   As Worksheet
+    Dim ws      As Worksheet
+    Dim lastRow As Long
+    Dim i       As Long
+    Dim col     As Long
 
-    Dim unitID      As String
-    Dim unitName    As String
-    Dim unitStatus  As String
+    ' ファイル名から可変部分(XXXX)を抽出する
+    ' 例: "3.2_ソフトウェアユニット仕様一覧_XXXX.xlsx" → "XXXX"
+    Const FILE_PREFIX As String = "3.2_ソフトウェアユニット仕様一覧_"
+    Dim fileName    As String
+    Dim fileIdent   As String
+    fileName  = Mid$(filePath, InStrRev(filePath, "\") + 1)
+    ' 拡張子を除去
+    If InStrRev(fileName, ".") > 0 Then
+        fileName = Left$(fileName, InStrRev(fileName, ".") - 1)
+    End If
+    ' プレフィックスより後ろを取得
+    If Left$(fileName, Len(FILE_PREFIX)) = FILE_PREFIX Then
+        fileIdent = Mid$(fileName, Len(FILE_PREFIX) + 1)
+    Else
+        fileIdent = fileName
+    End If
 
     Set wbSrc = Workbooks.Open(filePath, ReadOnly:=True, UpdateLinks:=False)
 
-    ' 対象シートを探す
     Set wsSrc = Nothing
     For Each ws In wbSrc.Worksheets
         If ws.Name = srcSheetName Then
@@ -172,46 +193,21 @@ Private Sub ReadMainFile(filePath As String, srcSheetName As String, _
         Exit Sub
     End If
 
-    ' 最終行をA列・C列のどちらか大きい方で判定
-    Dim lastA As Long, lastC As Long
-    lastA = wsSrc.Cells(wsSrc.Rows.Count, 1).End(xlUp).Row
-    lastC = wsSrc.Cells(wsSrc.Rows.Count, 3).End(xlUp).Row
-    lastRow = IIf(lastA > lastC, lastA, lastC)
+    ' 行1 = ヘッダー、行2以降がデータ（フラット構造）
+    lastRow = wsSrc.Cells(wsSrc.Rows.Count, 1).End(xlUp).Row
 
-    unitID     = ""
-    unitName   = ""
-    unitStatus = ""
-
-    ' 行4以降がデータ行（行1〜3はヘッダー）
-    For i = 4 To lastRow
-
-        Dim cellA As String
-        Dim cellC As String
-        cellA = Trim(CStr(wsSrc.Cells(i, 1).Value))
-        cellC = Trim(CStr(wsSrc.Cells(i, 3).Value))
-
-        If cellA <> "" Then
-            ' ユニット仕様ヘッダー行
-            unitID     = cellA
-            unitName   = Trim(CStr(wsSrc.Cells(i, 4).Value))
-            unitStatus = Trim(CStr(wsSrc.Cells(i, 2).Value))
-
-        ElseIf cellC <> "" Then
-            ' 関数仕様行 → ターゲットへ1行書き出し
-            With wsTarget
-                .Cells(outputRow, 1).Value = unitID
-                .Cells(outputRow, 2).Value = unitName
-                .Cells(outputRow, 3).Value = Trim(CStr(wsSrc.Cells(i, 7).Value))
-                .Cells(outputRow, 4).Value = Trim(CStr(wsSrc.Cells(i, 8).Value))
-                .Cells(outputRow, 5).Value = cellC
-                .Cells(outputRow, 6).Value = Trim(CStr(wsSrc.Cells(i, 4).Value))
-                .Cells(outputRow, 7).Value = unitStatus
-                .Cells(outputRow, 8).Value = Trim(CStr(wsSrc.Cells(i, 5).Value))
-                .Cells(outputRow, 9).Value = Trim(CStr(wsSrc.Cells(i, 6).Value))
-            End With
+    For i = 2 To lastRow
+        ' ソフトウェアユニット仕様ID(E列=5)が空の行はスキップ
+        If Trim(CStr(wsSrc.Cells(i, 5).Value)) <> "" Then
+            ' col1: 可変部分(XXXX)
+            wsTarget.Cells(outputRow, 1).Value = fileIdent
+            ' col2〜11: ソースの10列をそのままコピー
+            For col = 1 To 10
+                wsTarget.Cells(outputRow, col + 1).Value = _
+                    Trim(CStr(wsSrc.Cells(i, col).Value))
+            Next col
             outputRow = outputRow + 1
         End If
-
     Next i
 
     wbSrc.Close SaveChanges:=False
@@ -251,16 +247,16 @@ Private Sub BuildSummarySheet(wsDetail As Worksheet)
     With wsSummary
         .Cells(outRow, 1).Value = "ソフトウェアユニット仕様ID"
         .Cells(outRow, 2).Value = "ソフトウェアユニット仕様名"
-        .Cells(outRow, 3).Value = "仕様status"
-        .Cells(outRow, 4).Value = "関数数"
-        .Cells(outRow, 5).Value = "関数仕様ID一覧"
-        .Cells(outRow, 6).Value = "関数仕様名一覧"
-        .Cells(outRow, 7).Value = "搭載関数名一覧"
+        .Cells(outRow, 3).Value = "仕様"
+        .Cells(outRow, 4).Value = "コンポーネント仕様ID一覧"
+        .Cells(outRow, 5).Value = "搭載ソフトウェアユニットID一覧"
+        .Cells(outRow, 6).Value = "搭載ソフトウェアユニット名称一覧"
     End With
     outRow = 2
 
     ' ---- 詳細シートを走査（行2以降がデータ、行1はヘッダー）----
-    lastRow = wsDetail.Cells(wsDetail.Rows.Count, 1).End(xlUp).Row
+    ' 詳細シートはcol1=参照元識別子, col6=ソフトウェアユニット仕様ID(+1シフト)
+    lastRow = wsDetail.Cells(wsDetail.Rows.Count, 6).End(xlUp).Row
 
     i = 2
     Do While i <= lastRow
@@ -268,33 +264,32 @@ Private Sub BuildSummarySheet(wsDetail As Worksheet)
         Dim curUnitID   As String
         Dim curUnitName As String
         Dim curStatus   As String
-        Dim funcCount   As Long
         Dim funcIDs     As String
         Dim funcNames   As String
 
-        curUnitID   = Trim(CStr(wsDetail.Cells(i, 1).Value))
-        curUnitName = Trim(CStr(wsDetail.Cells(i, 2).Value))
-        curStatus   = Trim(CStr(wsDetail.Cells(i, 3).Value))
-        funcCount   = 0
+        ' 集約キー: col6 = ソフトウェアユニット仕様ID
+        curUnitID   = Trim(CStr(wsDetail.Cells(i, 6).Value))
+        curUnitName = Trim(CStr(wsDetail.Cells(i, 7).Value))
+        curStatus   = Trim(CStr(wsDetail.Cells(i, 5).Value))
         funcIDs     = ""
         funcNames   = ""
 
         Dim funcCarriedNames As String
         funcCarriedNames = ""
 
-        ' 同じ ユニット仕様ID が続く間まとめる
+        ' 同じ ユニット仕様ID(col6) が続く間まとめる
         Do While i <= lastRow And _
-                 Trim(CStr(wsDetail.Cells(i, 1).Value)) = curUnitID
+                 Trim(CStr(wsDetail.Cells(i, 6).Value)) = curUnitID
 
             Dim fID   As String
             Dim fName As String
             Dim fCarriedName As String
-            fID          = Trim(CStr(wsDetail.Cells(i, 5).Value))
-            fName        = Trim(CStr(wsDetail.Cells(i, 6).Value))
-            fCarriedName = Trim(CStr(wsDetail.Cells(i, 4).Value))
+            ' col2=コンポーネント仕様ID, col10=搭載ユニットID, col11=搭載ユニット名称
+            fID          = Trim(CStr(wsDetail.Cells(i, 2).Value))
+            fName        = Trim(CStr(wsDetail.Cells(i, 10).Value))
+            fCarriedName = Trim(CStr(wsDetail.Cells(i, 11).Value))
 
             If fID <> "" Then
-                funcCount = funcCount + 1
                 If funcIDs = "" Then
                     funcIDs          = fID
                     funcNames        = fName
@@ -309,20 +304,18 @@ Private Sub BuildSummarySheet(wsDetail As Worksheet)
             i = i + 1
         Loop
 
-        ' サマリー行に書き出し
+        ' サマリー行に書き出し（件数列なし）
         With wsSummary
             .Cells(outRow, 1).Value = curUnitID
             .Cells(outRow, 2).Value = curUnitName
             .Cells(outRow, 3).Value = curStatus
-            .Cells(outRow, 4).Value = funcCount
-            .Cells(outRow, 5).Value = funcIDs
-            .Cells(outRow, 6).Value = funcNames
-            .Cells(outRow, 7).Value = funcCarriedNames
+            .Cells(outRow, 4).Value = funcIDs
+            .Cells(outRow, 5).Value = funcNames
+            .Cells(outRow, 6).Value = funcCarriedNames
 
-            ' 折り返し表示（改行が見えるように）
+            .Cells(outRow, 4).WrapText = True
             .Cells(outRow, 5).WrapText = True
             .Cells(outRow, 6).WrapText = True
-            .Cells(outRow, 7).WrapText = True
 
             ' 行高さを内容に合わせる
             .Rows(outRow).AutoFit
@@ -337,10 +330,62 @@ Private Sub BuildSummarySheet(wsDetail As Worksheet)
 
     ' 関数一覧列は広げすぎず上限を設ける
     Dim c As Integer
-    For c = 5 To 7
+    For c = 4 To 6
         If wsSummary.Columns(c).ColumnWidth > 50 Then
             wsSummary.Columns(c).ColumnWidth = 50
         End If
     Next c
+
+    ' ---- 1行目ヘッダーの書式（データのある列のみ）----
+    Dim lastHeaderCol As Long
+    lastHeaderCol = wsSummary.Cells(1, wsSummary.Columns.Count).End(xlToLeft).Column
+    With wsSummary.Range(wsSummary.Cells(1, 1), wsSummary.Cells(1, lastHeaderCol))
+        .Interior.Color = RGB(0, 112, 192)
+        .Font.Color = RGB(255, 255, 255)
+        .Font.Bold = True
+    End With
+
+    ' ---- 罫線（データが存在する範囲全体）----
+    If outRow > 2 Then
+        With wsSummary.Range(wsSummary.Cells(1, 1), wsSummary.Cells(outRow - 1, lastHeaderCol)).Borders
+            .LineStyle = xlContinuous
+            .Weight = xlThin
+            .Color = RGB(0, 0, 0)
+        End With
+    End If
+
+End Sub
+
+' ----------------------------------------------------------
+' 「ユニット仕様一覧」シートの書式を設定する
+' ----------------------------------------------------------
+Private Sub FormatDetailSheet(ws As Worksheet, ByVal dataLastRow As Long)
+
+    ' ---- 1行目ヘッダーの書式（データのある列のみ）----
+    Dim lastHeaderCol As Long
+    lastHeaderCol = ws.Cells(1, ws.Columns.Count).End(xlToLeft).Column
+    With ws.Range(ws.Cells(1, 1), ws.Cells(1, lastHeaderCol))
+        .Interior.Color = RGB(0, 112, 192)
+        .Font.Color = RGB(255, 255, 255)
+        .Font.Bold = True
+    End With
+
+    ' ---- 列幅・折り返し ----
+    ws.Columns("B").ColumnWidth = 65
+    ws.Columns("B").WrapText = True
+
+    ws.Columns("D").ColumnWidth = 50
+
+    ws.Columns("F").ColumnWidth = 120
+    ws.Columns("F").WrapText = True
+
+    ' ---- 罫線（データが存在する範囲全体）----
+    If dataLastRow >= 1 Then
+        With ws.Range(ws.Cells(1, 1), ws.Cells(dataLastRow, 11)).Borders
+            .LineStyle = xlContinuous
+            .Weight = xlThin
+            .Color = RGB(0, 0, 0)
+        End With
+    End If
 
 End Sub

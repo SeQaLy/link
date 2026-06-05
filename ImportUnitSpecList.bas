@@ -35,7 +35,12 @@ Public Sub ImportUnitSpecList()
             After:=ThisWorkbook.Worksheets(ThisWorkbook.Worksheets.Count))
         wsTarget.Name = TARGET_SHEET
     Else
-        wsTarget.Cells.Clear
+        ' 2行目以降のデータのみ削除（1行目ヘッダーは保持）
+        Dim lastDataRow As Long
+        lastDataRow = wsTarget.Cells(wsTarget.Rows.Count, 1).End(xlUp).Row
+        If lastDataRow >= 2 Then
+            wsTarget.Rows("2:" & lastDataRow).Delete
+        End If
     End If
 
     ' ---- ヘッダー行（ソース「ユニット仕様」シートの列名に合わせる）----

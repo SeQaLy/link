@@ -65,8 +65,9 @@ Public Sub ImportUnitSpecList()
     Set allRows = New Collection
     Dim ignoreFolders As Variant
     ignoreFolders = Array(".svn")
+    ' プレフィックスは拡張子除去不要のため NormalizePrefix を使う
     Call ProcessFolder(fso, fso.GetFolder(unitListFolder), _
-                       NormalizeFileName(SRC_FILENAME), SRC_SHEET, ignoreFolders, allRows)
+                       NormalizePrefix(SRC_FILENAME), SRC_SHEET, ignoreFolders, allRows)
 
     ' ---- 一括書き込み ----
     If allRows.Count > 0 Then
@@ -110,7 +111,7 @@ Private Sub ProcessFolder(fso As Object, folder As Object, _
         If Left(file.Name, 1) <> "~" Then
             ' 拡張子が .xlsx であること、かつプレフィックス前方一致でマッチ
             If LCase$(Right$(file.Name, 5)) = ".xlsx" Then
-                If Left(NormalizeFileName(file.Name), Len(normalizedTarget)) = normalizedTarget Then
+                If Left(NormalizePrefix(file.Name), Len(normalizedTarget)) = normalizedTarget Then
                     Call ReadMainFile(file.Path, srcSheetName, allRows)
                 End If
             End If
@@ -167,6 +168,19 @@ Private Function NormalizeFileName(ByVal fileName As String) As String
     result = Replace(result, vbLf, "")
 
     NormalizeFileName = result
+
+End Function
+
+' ファイル名プレフィックス用の正規化（拡張子除去なし）
+' SRC_FILENAME のように "3.2_～" という形式を正しく扱うため
+Private Function NormalizePrefix(ByVal name As String) As String
+
+    Dim result As String
+    result = LCase$(Trim$(name))
+    result = Replace(result, " ", "")
+    result = Replace(result, ChrW(&H3000), "")
+    result = Replace(result, vbTab, "")
+    NormalizePrefix = result
 
 End Function
 

@@ -59,11 +59,14 @@ Public Sub ImportUnitSpecList()
     ' ---- フォルダ再帰処理（全データをCollectionに収集）----
     Application.ScreenUpdating = False
     Application.DisplayAlerts = False
+    Application.Calculation = xlCalculationManual
 
     Dim allRows As Collection
     Set allRows = New Collection
+    Dim ignoreFolders As Variant
+    ignoreFolders = Array(".svn")
     Call ProcessFolder(fso, fso.GetFolder(unitListFolder), _
-                       SRC_FILENAME, SRC_SHEET, allRows)
+                       NormalizeFileName(SRC_FILENAME), SRC_SHEET, ignoreFolders, allRows)
 
     ' ---- 一括書き込み ----
     If allRows.Count > 0 Then
@@ -85,6 +88,7 @@ Public Sub ImportUnitSpecList()
 
     Application.DisplayAlerts = True
     Application.ScreenUpdating = True
+    Application.Calculation = xlCalculationAutomatic
 
     ' ---- 詳細シートの書式設定 ----
     Call FormatDetailSheet(wsTarget, outputRow - 1)
@@ -96,34 +100,29 @@ Public Sub ImportUnitSpecList()
 End Sub
 
 Private Sub ProcessFolder(fso As Object, folder As Object, _
-                          srcFileName As String, srcSheetName As String, _
-                          allRows As Collection)
+                          normalizedTarget As String, srcSheetName As String, _
+                          ignoreFolders As Variant, allRows As Collection)
 
     Dim subFolder As Object
     Dim file      As Object
-    Dim normalizedTarget As String
-    Dim ignoreFolders As Variant
-    Dim ignoreName As String
-
-    normalizedTarget = NormalizeFileName(srcFileName)
-    ignoreFolders = Array(".svn")
 
     For Each file In folder.Files
         If Left(file.Name, 1) <> "~" Then
-            ' プレフィックス前方一致でマッチ
-            If Left(NormalizeFileName(file.Name), Len(normalizedTarget)) = normalizedTarget Then
-                Call ReadMainFile(file.Path, srcSheetName, allRows)
+            ' 拡張子が .xlsx であること、かつプレフィックス前方一致でマッチ
+            If LCase$(Right$(file.Name, 5)) = ".xlsx" Then
+                If Left(NormalizeFileName(file.Name), Len(normalizedTarget)) = normalizedTarget Then
+                    Call ReadMainFile(file.Path, srcSheetName, allRows)
+                End If
             End If
         End If
     Next file
 
     For Each subFolder In folder.SubFolders
-        ignoreName = NormalizeFolderName(subFolder.Name)
-        If Not IsIgnoredFolder(ignoreName, ignoreFolders) Then
+        If Not IsIgnoredFolder(NormalizeFolderName(subFolder.Name), ignoreFolders) Then
             ' アクセス不可フォルダ（シンボリックリンク等）をスキップ
             If fso.FolderExists(subFolder.Path) Then
                 On Error Resume Next
-                Call ProcessFolder(fso, subFolder, srcFileName, srcSheetName, allRows)
+                Call ProcessFolder(fso, subFolder, normalizedTarget, srcSheetName, ignoreFolders, allRows)
                 On Error GoTo 0
             End If
         End If
@@ -249,8 +248,6 @@ Private Sub BuildSummarySheet(wsDetail As Worksheet)
     Dim wsSummary   As Worksheet
     Dim ws          As Worksheet
     Dim lastRow     As Long
-    Dim i           As Long
-    Dim outRow      As Long
 
     ' ---- サマリーシートの準備 ----
     Set wsSummary = Nothing
@@ -270,92 +267,99 @@ Private Sub BuildSummarySheet(wsDetail As Worksheet)
     End If
 
     ' ---- ヘッダー ----
-    outRow = 1
     With wsSummary
-        .Cells(outRow, 1).Value = "ソフトウェアユニット仕様ID"
-        .Cells(outRow, 2).Value = "ソフトウェアユニット仕様名"
-        .Cells(outRow, 3).Value = "仕様"
-        .Cells(outRow, 4).Value = "コンポーネント仕様ID一覧"
-        .Cells(outRow, 5).Value = "搭載ソフトウェアユニットID一覧"
-        .Cells(outRow, 6).Value = "搭載ソフトウェアユニット名称一覧"
+        .Cells(1, 1).Value = "ソフトウェアユニット仕様ID"
+        .Cells(1, 2).Value = "ソフトウェアユニット仕様名"
+        .Cells(1, 3).Value = "仕様"
+        .Cells(1, 4).Value = "コンポーネント仕様ID一覧"
+        .Cells(1, 5).Value = "搭載ソフトウェアユニットID一覧"
+        .Cells(1, 6).Value = "搭載ソフトウェアユニット名称一覧"
     End With
-    outRow = 2
 
-    ' ---- 詳細シートを走査（行2以降がデータ、行1はヘッダー）----
-    ' 詳細シートはcol1=参照元識別子, col6=ソフトウェアユニット仕様ID(+1シフト)
+    ' ---- 詳細シートを配列に一括読み込み ----
+    ' 詳細: col1=参照元識別子, col2=コンポ仕様ID, col5=仕様, col6=ユニット仕様ID,
+    '        col7=ユニット仕様名, col10=搭載ユニットID, col11=搭載ユニット名称
     lastRow = wsDetail.Cells(wsDetail.Rows.Count, 6).End(xlUp).Row
+    If lastRow < 2 Then Exit Sub
 
-    i = 2
-    Do While i <= lastRow
+    Dim detArr As Variant
+    detArr = wsDetail.Range(wsDetail.Cells(2, 1), wsDetail.Cells(lastRow, 11)).Value
+
+    ' ---- メモリ上で集約 ----
+    Dim totalRows As Long
+    totalRows = UBound(detArr, 1)
+
+    ' 最大でもtotalRows行にはならないが余裕を持って確保
+    Dim sumArr() As Variant
+    ReDim sumArr(1 To totalRows, 1 To 6)
+
+    Dim outRow  As Long
+    outRow = 0
+    Dim i As Long
+    i = 1
+
+    Do While i <= totalRows
 
         Dim curUnitID   As String
         Dim curUnitName As String
         Dim curStatus   As String
         Dim funcIDs     As String
         Dim funcNames   As String
+        Dim funcCarried As String
 
-        ' 集約キー: col6 = ソフトウェアユニット仕様ID
-        curUnitID   = Trim(CStr(wsDetail.Cells(i, 6).Value))
-        curUnitName = Trim(CStr(wsDetail.Cells(i, 7).Value))
-        curStatus   = Trim(CStr(wsDetail.Cells(i, 5).Value))
+        curUnitID   = Trim(CStr(detArr(i, 6)))
+        curUnitName = Trim(CStr(detArr(i, 7)))
+        curStatus   = Trim(CStr(detArr(i, 5)))
         funcIDs     = ""
         funcNames   = ""
+        funcCarried = ""
 
-        Dim funcCarriedNames As String
-        funcCarriedNames = ""
-
-        ' 同じ ユニット仕様ID(col6) が続く間まとめる
-        Do While i <= lastRow And _
-                 Trim(CStr(wsDetail.Cells(i, 6).Value)) = curUnitID
-
-            Dim fID   As String
-            Dim fName As String
-            Dim fCarriedName As String
-            ' col2=コンポーネント仕様ID, col10=搭載ユニットID, col11=搭載ユニット名称
-            fID          = Trim(CStr(wsDetail.Cells(i, 2).Value))
-            fName        = Trim(CStr(wsDetail.Cells(i, 10).Value))
-            fCarriedName = Trim(CStr(wsDetail.Cells(i, 11).Value))
+        Do While i <= totalRows And Trim(CStr(detArr(i, 6))) = curUnitID
+            Dim fID      As String
+            Dim fCarrID  As String
+            Dim fCarrNm  As String
+            fID     = Trim(CStr(detArr(i, 2)))
+            fCarrID = Trim(CStr(detArr(i, 10)))
+            fCarrNm = Trim(CStr(detArr(i, 11)))
 
             If fID <> "" Then
                 If funcIDs = "" Then
-                    funcIDs          = fID
-                    funcNames        = fName
-                    funcCarriedNames = fCarriedName
+                    funcIDs     = fID
+                    funcNames   = fCarrID
+                    funcCarried = fCarrNm
                 Else
-                    funcIDs          = funcIDs          & Chr(10) & fID
-                    funcNames        = funcNames        & Chr(10) & fName
-                    funcCarriedNames = funcCarriedNames & Chr(10) & fCarriedName
+                    funcIDs     = funcIDs     & Chr(10) & fID
+                    funcNames   = funcNames   & Chr(10) & fCarrID
+                    funcCarried = funcCarried & Chr(10) & fCarrNm
                 End If
             End If
-
             i = i + 1
         Loop
 
-        ' サマリー行に書き出し（件数列なし）
-        With wsSummary
-            .Cells(outRow, 1).Value = curUnitID
-            .Cells(outRow, 2).Value = curUnitName
-            .Cells(outRow, 3).Value = curStatus
-            .Cells(outRow, 4).Value = funcIDs
-            .Cells(outRow, 5).Value = funcNames
-            .Cells(outRow, 6).Value = funcCarriedNames
-
-            .Cells(outRow, 4).WrapText = True
-            .Cells(outRow, 5).WrapText = True
-            .Cells(outRow, 6).WrapText = True
-
-            ' 行高さを内容に合わせる
-            .Rows(outRow).AutoFit
-        End With
-
         outRow = outRow + 1
+        sumArr(outRow, 1) = curUnitID
+        sumArr(outRow, 2) = curUnitName
+        sumArr(outRow, 3) = curStatus
+        sumArr(outRow, 4) = funcIDs
+        sumArr(outRow, 5) = funcNames
+        sumArr(outRow, 6) = funcCarried
 
     Loop
 
-    ' ---- 列幅を整える ----
+    ' ---- 一括書き込み ----
+    If outRow > 0 Then
+        wsSummary.Range(wsSummary.Cells(2, 1), wsSummary.Cells(1 + outRow, 6)).Value = sumArr
+    End If
+
+    ' ---- 折り返し・列幅（ループ外で一括）----
+    If outRow > 0 Then
+        With wsSummary.Range(wsSummary.Cells(2, 4), wsSummary.Cells(1 + outRow, 6))
+            .WrapText = True
+        End With
+    End If
+
     wsSummary.Columns("A:F").AutoFit
 
-    ' 関数一覧列は広げすぎず上限を設ける
     Dim c As Integer
     For c = 4 To 6
         If wsSummary.Columns(c).ColumnWidth > 50 Then
@@ -373,8 +377,8 @@ Private Sub BuildSummarySheet(wsDetail As Worksheet)
     End With
 
     ' ---- 罫線（データが存在する範囲全体）----
-    If outRow > 2 Then
-        With wsSummary.Range(wsSummary.Cells(1, 1), wsSummary.Cells(outRow - 1, lastHeaderCol)).Borders
+    If outRow > 0 Then
+        With wsSummary.Range(wsSummary.Cells(1, 1), wsSummary.Cells(1 + outRow, lastHeaderCol)).Borders
             .LineStyle = xlContinuous
             .Weight = xlThin
             .Color = RGB(0, 0, 0)

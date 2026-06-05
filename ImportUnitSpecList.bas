@@ -97,7 +97,7 @@ Public Sub ImportUnitSpecList()
     ' ---- 詳細シートの書式設定 ----
     Call FormatDetailSheet(wsTarget, outputRow - 1)
 
-    MsgBox "インポート完了。" & (outputRow - 2) & " 件の関数仕様を書き込みました。", vbInformation
+    MsgBox "インポート完了。" & (outputRow - 2) & " 件のユニット仕様を書き込みました。", vbInformation
 
 End Sub
 
@@ -221,7 +221,7 @@ Private Sub BuildProgressSheet()
         .Cells(1, 3).Value = "紐づけ済"
         .Cells(1, 4).Value = "未紐づけ"
         .Cells(1, 5).Value = "進捗率"
-        .Cells(1, 6).Value = "進捗バー"
+        .Cells(1, 6).Value = "進捗"
     End With
 
     ' ---- コンポーネントごとの行 ----
@@ -312,8 +312,11 @@ Private Sub BuildProgressSheet()
     End With
 
     ' ---- 列幅 ----
-    wsSum.Columns("A:F").AutoFit
-    wsSum.Columns("F").ColumnWidth = BAR_MAX + 4
+    wsSum.Columns("A:E").AutoFit
+    wsSum.Columns("F").ColumnWidth = 40
+
+    ' F2:F16 フォントサイズ10
+    wsSum.Range("F2:F16").Font.Size = 10
 
 End Sub
 
@@ -610,6 +613,24 @@ Private Sub BuildSpecSheet(wsDetail As Worksheet)
 
     ' ---- 列幅自動調整 ----
     wsSpec.Columns("A:E").AutoFit
+
+    ' ---- タイトル行の書式（A1:E1）----
+    With wsSpec.Range("A1:E1")
+        .Interior.Color = RGB(0, 112, 192)
+        .Font.Color = RGB(255, 255, 255)
+        .Font.Bold = True
+    End With
+
+    ' ---- 罫線（データ全体）----
+    Dim specDataLastRow As Long
+    specDataLastRow = wsSpec.Cells(wsSpec.Rows.Count, 3).End(xlUp).Row
+    If specDataLastRow >= 1 Then
+        With wsSpec.Range(wsSpec.Cells(1, 1), wsSpec.Cells(specDataLastRow, 5)).Borders
+            .LineStyle = xlContinuous
+            .Weight = xlThin
+            .Color = RGB(0, 0, 0)
+        End With
+    End If
 
 End Sub
 

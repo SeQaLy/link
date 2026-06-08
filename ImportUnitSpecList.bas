@@ -350,19 +350,47 @@ Private Sub BuildProgressSheet()
         dic(compNm) = arr
     Next i
 
+    Dim grandTotal As Long
+    Dim grandDone As Long
+    For k = 0 To dicOrd.Count - 1
+        arr = dic(dicOrd(k))
+        grandTotal = grandTotal + arr(0)
+        grandDone = grandDone + arr(1)
+    Next k
+
+    Dim grandPct As Double
+    grandPct = IIf(grandTotal > 0, grandDone / grandTotal, 0)
+
+    ' ---- 仕様単位サマリー（全体）----
+    With wsSum
+        .Cells(1, 1).Value = "【仕様単位サマリー】"
+        .Cells(1, 2).Value = grandTotal
+        .Cells(1, 3).Value = grandDone
+        .Cells(1, 4).Value = grandTotal - grandDone
+        .Cells(1, 5).Value = grandPct
+        .Cells(1, 5).NumberFormat = "0.0%"
+        .Cells(1, 6).Value = BuildProgressBar(Int(grandPct * BAR_MAX), BAR_MAX)
+    End With
+    With wsSum.Range(wsSum.Cells(1, 1), wsSum.Cells(1, 6))
+        .Interior.Color = RGB(30, 80, 160)
+        .Font.Color = RGB(255, 255, 255)
+        .Font.Bold = True
+    End With
+    wsSum.Cells(1, 5).Interior.Color = RGB(30, 80, 160)
+
     ' ---- タイトル行 ----
     With wsSum
-        .Cells(1, 1).Value = "コンポーネント名"
-        .Cells(1, 2).Value = "ユニット仕様数"
-        .Cells(1, 3).Value = "紐づけ済"
-        .Cells(1, 4).Value = "未紐づけ"
-        .Cells(1, 5).Value = "進捗率"
-        .Cells(1, 6).Value = "進捗"
+        .Cells(3, 1).Value = "コンポーネント名"
+        .Cells(3, 2).Value = "ユニット仕様数"
+        .Cells(3, 3).Value = "紐づけ済"
+        .Cells(3, 4).Value = "未紐づけ"
+        .Cells(3, 5).Value = "進捗率"
+        .Cells(3, 6).Value = "進捗"
     End With
 
     ' ---- コンポーネントごとの行 ----
     Dim outRow As Long
-    outRow = 2
+    outRow = 4
     Dim k       As Long
     Dim total   As Long
     Dim done    As Long
@@ -405,16 +433,6 @@ Private Sub BuildProgressSheet()
     Next k
 
     ' ---- 合計行 ----
-    Dim grandTotal As Long
-    Dim grandDone  As Long
-    For k = 0 To dicOrd.Count - 1
-        arr = dic(dicOrd(k))
-        grandTotal = grandTotal + arr(0)
-        grandDone = grandDone + arr(1)
-    Next k
-
-    Dim grandPct As Double
-    grandPct = IIf(grandTotal > 0, grandDone / grandTotal, 0)
     bars = Int(grandPct * BAR_MAX)
 
     With wsSum
@@ -434,7 +452,7 @@ Private Sub BuildProgressSheet()
     End With
 
     ' ---- ヘッダー書式 ----
-    With wsSum.Range(wsSum.Cells(1, 1), wsSum.Cells(1, 6))
+    With wsSum.Range(wsSum.Cells(3, 1), wsSum.Cells(3, 6))
         .Interior.Color = RGB(0, 112, 192)
         .Font.Color = RGB(255, 255, 255)
         .Font.Bold = True
@@ -477,120 +495,35 @@ Private Function BuildFunctionSummarySection(ByVal wsSum As Worksheet, ByVal wsF
     Dim funcArr As Variant
     funcArr = wsFunc.Range(wsFunc.Cells(2, 1), wsFunc.Cells(funcLastRow, 5)).Value
 
-    wsSum.Cells(startRow, 1).Value = "【関数単位サマリー】"
-    With wsSum.Range(wsSum.Cells(startRow, 1), wsSum.Cells(startRow, 6))
-        .Interior.Color = RGB(30, 80, 160)
-        .Font.Color = RGB(255, 255, 255)
-        .Font.Bold = True
-    End With
-
-    With wsSum
-        .Cells(startRow + 1, 1).Value = "コンポーネント名"
-        .Cells(startRow + 1, 2).Value = "対象関数数"
-        .Cells(startRow + 1, 3).Value = "紐づけ済"
-        .Cells(startRow + 1, 4).Value = "未紐づけ"
-        .Cells(startRow + 1, 5).Value = "進捗率"
-        .Cells(startRow + 1, 6).Value = "進捗"
-    End With
-    With wsSum.Range(wsSum.Cells(startRow + 1, 1), wsSum.Cells(startRow + 1, 6))
-        .Interior.Color = RGB(0, 112, 192)
-        .Font.Color = RGB(255, 255, 255)
-        .Font.Bold = True
-    End With
-
-    Dim dic As Object
-    Dim dicOrd As Object
-    Dim funcMap As Object
-    Set dic = CreateObject("Scripting.Dictionary")
-    Set dicOrd = CreateObject("Scripting.Dictionary")
-    Set funcMap = CreateObject("Scripting.Dictionary")
-
     Dim i As Long
-    Dim j As Long
-    Dim ordIdx As Long
-    Dim compNm As String
-    Dim linkedComponents() As String
     Dim totalFunctions As Long
     totalFunctions = UBound(funcArr, 1)
     Dim linkedFunctionCount As Long
 
     For i = 1 To totalFunctions
-        linkedComponents = SplitLines(CStr(funcArr(i, 2)))
-        If UBound(linkedComponents) >= LBound(linkedComponents) Then
-            Dim hasLinkedComponent As Boolean
-            For j = LBound(linkedComponents) To UBound(linkedComponents)
-                compNm = Trim$(linkedComponents(j))
-                If compNm <> "" Then
-                    If Not dic.Exists(compNm) Then
-                        dic.Add compNm, 0
-                        dicOrd.Add ordIdx, compNm
-                        ordIdx = ordIdx + 1
-                        Set funcMap(compNm) = CreateObject("Scripting.Dictionary")
-                    End If
-                    If Not funcMap(compNm).Exists(CStr(funcArr(i, 1))) Then
-                        funcMap(compNm).Add CStr(funcArr(i, 1)), True
-                    End If
-                    hasLinkedComponent = True
-                End If
-            Next j
-            If hasLinkedComponent Then
-                linkedFunctionCount = linkedFunctionCount + 1
-            End If
-        End If
+        If CountLines(CStr(funcArr(i, 2))) > 0 Then linkedFunctionCount = linkedFunctionCount + 1
     Next i
 
-    If dic.Count = 0 Then
-        BuildFunctionSummarySection = startRow + 1
-        Exit Function
-    End If
-
-    Dim outRow As Long
-    outRow = startRow + 2
-
-    Dim total As Long
-    Dim done As Long
     Dim pct As Double
     Dim bars As Integer
-
-    For i = 0 To dicOrd.Count - 1
-        compNm = CStr(dicOrd(i))
-        done = CLng(funcMap(compNm).Count)
-        total = totalFunctions
-        pct = IIf(total > 0, done / total, 0)
-        bars = Int(pct * barMax)
-
-        With wsSum
-            .Cells(outRow, 1).Value = compNm
-            .Cells(outRow, 2).Value = total
-            .Cells(outRow, 3).Value = done
-            .Cells(outRow, 4).Value = total - done
-            .Cells(outRow, 5).Value = pct
-            .Cells(outRow, 5).NumberFormat = "0.0%"
-            .Cells(outRow, 6).Value = BuildProgressBar(bars, barMax)
-        End With
-
-        ApplyProgressColor wsSum.Cells(outRow, 5), pct
-        outRow = outRow + 1
-    Next i
-
     pct = IIf(totalFunctions > 0, linkedFunctionCount / totalFunctions, 0)
     bars = Int(pct * barMax)
 
     With wsSum
-        .Cells(outRow, 1).Value = "【関数サマリー合計】"
-        .Cells(outRow, 2).Value = totalFunctions
-        .Cells(outRow, 3).Value = linkedFunctionCount
-        .Cells(outRow, 4).Value = totalFunctions - linkedFunctionCount
-        .Cells(outRow, 5).Value = pct
-        .Cells(outRow, 5).NumberFormat = "0.0%"
-        .Cells(outRow, 6).Value = BuildProgressBar(bars, barMax)
-        .Range(.Cells(outRow, 1), .Cells(outRow, 6)).Interior.Color = RGB(30, 80, 160)
-        .Range(.Cells(outRow, 1), .Cells(outRow, 6)).Font.Color = RGB(255, 255, 255)
-        .Range(.Cells(outRow, 1), .Cells(outRow, 6)).Font.Bold = True
-        .Cells(outRow, 5).Interior.Color = RGB(30, 80, 160)
+        .Cells(startRow, 1).Value = "【関数単位サマリー】"
+        .Cells(startRow, 2).Value = totalFunctions
+        .Cells(startRow, 3).Value = linkedFunctionCount
+        .Cells(startRow, 4).Value = totalFunctions - linkedFunctionCount
+        .Cells(startRow, 5).Value = pct
+        .Cells(startRow, 5).NumberFormat = "0.0%"
+        .Cells(startRow, 6).Value = BuildProgressBar(bars, barMax)
+        .Range(.Cells(startRow, 1), .Cells(startRow, 6)).Interior.Color = RGB(30, 80, 160)
+        .Range(.Cells(startRow, 1), .Cells(startRow, 6)).Font.Color = RGB(255, 255, 255)
+        .Range(.Cells(startRow, 1), .Cells(startRow, 6)).Font.Bold = True
+        .Cells(startRow, 5).Interior.Color = RGB(30, 80, 160)
     End With
 
-    BuildFunctionSummarySection = outRow
+    BuildFunctionSummarySection = startRow
 
 End Function
 

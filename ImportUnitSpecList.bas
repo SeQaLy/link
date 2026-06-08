@@ -985,7 +985,35 @@ Private Sub InitializeFunctionSheet(ByVal wsFunc As Worksheet, ByVal wsFuncList 
     If funcListLastRow >= 2 Then
         Dim listArr As Variant
         listArr = wsFuncList.Range(wsFuncList.Cells(2, 1), wsFuncList.Cells(funcListLastRow, 1)).Value
-        wsFunc.Range(wsFunc.Cells(2, 1), wsFunc.Cells(1 + UBound(listArr, 1), 1)).Value = listArr
+
+        Dim uniqueDic As Object
+        Set uniqueDic = CreateObject("Scripting.Dictionary")
+
+        Dim i As Long
+        Dim funcName As String
+        For i = 1 To UBound(listArr, 1)
+            funcName = Trim$(CStr(listArr(i, 1)))
+            If funcName <> "" Then
+                If Not uniqueDic.Exists(funcName) Then
+                    uniqueDic.Add funcName, funcName
+                End If
+            End If
+        Next i
+
+        If uniqueDic.Count > 0 Then
+            Dim outArr() As Variant
+            ReDim outArr(1 To uniqueDic.Count, 1 To 1)
+
+            Dim keyIndex As Long
+            keyIndex = 1
+            Dim key As Variant
+            For Each key In uniqueDic.Keys
+                outArr(keyIndex, 1) = CStr(key)
+                keyIndex = keyIndex + 1
+            Next key
+
+            wsFunc.Range(wsFunc.Cells(2, 1), wsFunc.Cells(1 + uniqueDic.Count, 1)).Value = outArr
+        End If
     End If
 
     wsFunc.Columns("A:E").AutoFit

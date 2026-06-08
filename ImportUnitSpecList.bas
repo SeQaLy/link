@@ -370,30 +370,19 @@ Private Sub BuildProgressSheet()
         .Font.Bold = True
     End With
 
-    With wsSum
-        .Cells(2, 1).Value = "【仕様全体】"
-        .Cells(2, 2).Value = grandTotal
-        .Cells(2, 3).Value = grandDone
-        .Cells(2, 4).Value = grandTotal - grandDone
-        .Cells(2, 5).Value = grandPct
-        .Cells(2, 5).NumberFormat = "0.0%"
-        .Cells(2, 6).Value = BuildProgressBar(Int(grandPct * BAR_MAX), BAR_MAX)
-    End With
-    ApplySummaryClosingStyle wsSum, 2
-
     ' ---- タイトル行 ----
     With wsSum
-        .Cells(3, 1).Value = "コンポーネント名"
-        .Cells(3, 2).Value = "ユニット仕様数"
-        .Cells(3, 3).Value = "紐づけ済"
-        .Cells(3, 4).Value = "未紐づけ"
-        .Cells(3, 5).Value = "進捗率"
-        .Cells(3, 6).Value = "進捗"
+        .Cells(2, 1).Value = "コンポーネント名"
+        .Cells(2, 2).Value = "ユニット仕様数"
+        .Cells(2, 3).Value = "紐づけ済"
+        .Cells(2, 4).Value = "未紐づけ"
+        .Cells(2, 5).Value = "進捗率"
+        .Cells(2, 6).Value = "進捗"
     End With
 
     ' ---- コンポーネントごとの行 ----
     Dim outRow As Long
-    outRow = 4
+    outRow = 3
     Dim total   As Long
     Dim done    As Long
     Dim pct     As Double
@@ -454,7 +443,7 @@ Private Sub BuildProgressSheet()
     End With
 
     ' ---- ヘッダー書式 ----
-    With wsSum.Range(wsSum.Cells(3, 1), wsSum.Cells(3, 6))
+    With wsSum.Range(wsSum.Cells(2, 1), wsSum.Cells(2, 6))
         .Interior.Color = RGB(0, 112, 192)
         .Font.Color = RGB(255, 255, 255)
         .Font.Bold = True

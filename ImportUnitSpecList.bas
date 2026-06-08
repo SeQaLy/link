@@ -384,7 +384,7 @@ Private Sub BuildProgressSheet()
             .Cells(outRow, 4).Value = total - done
             .Cells(outRow, 5).Value = pct
             .Cells(outRow, 5).NumberFormat = "0.0%"
-            .Cells(outRow, 6).Value = String(bars, ChrW(&H25A0)) & String(BAR_MAX - bars, ChrW(&H25A1))
+            .Cells(outRow, 6).Value = BuildProgressBar(bars, BAR_MAX)
         End With
 
         ' 進捗率に応じた色付け
@@ -424,7 +424,7 @@ Private Sub BuildProgressSheet()
         .Cells(outRow, 4).Value = grandTotal - grandDone
         .Cells(outRow, 5).Value = grandPct
         .Cells(outRow, 5).NumberFormat = "0.0%"
-        .Cells(outRow, 6).Value = String(bars, ChrW(&H25A0)) & String(BAR_MAX - bars, ChrW(&H25A1))
+        .Cells(outRow, 6).Value = BuildProgressBar(bars, BAR_MAX)
 
         ' 合計行の背景
         .Range(.Cells(outRow, 1), .Cells(outRow, 6)).Interior.Color = RGB(30, 80, 160)
@@ -500,21 +500,24 @@ Private Function BuildFunctionSummarySection(ByVal wsSum As Worksheet, ByVal wsF
 
     Dim dic As Object
     Dim dicOrd As Object
+    Dim funcMap As Object
     Set dic = CreateObject("Scripting.Dictionary")
     Set dicOrd = CreateObject("Scripting.Dictionary")
+    Set funcMap = CreateObject("Scripting.Dictionary")
 
     Dim i As Long
     Dim j As Long
     Dim ordIdx As Long
     Dim compNm As String
     Dim linkedComponents() As String
-    Dim arr As Variant
     Dim totalFunctions As Long
     totalFunctions = UBound(funcArr, 1)
+    Dim linkedFunctionCount As Long
 
     For i = 1 To totalFunctions
         linkedComponents = SplitLines(CStr(funcArr(i, 2)))
         If UBound(linkedComponents) >= LBound(linkedComponents) Then
+            Dim hasLinkedComponent As Boolean
             For j = LBound(linkedComponents) To UBound(linkedComponents)
                 compNm = Trim$(linkedComponents(j))
                 If compNm <> "" Then
@@ -522,10 +525,17 @@ Private Function BuildFunctionSummarySection(ByVal wsSum As Worksheet, ByVal wsF
                         dic.Add compNm, 0
                         dicOrd.Add ordIdx, compNm
                         ordIdx = ordIdx + 1
+                        Set funcMap(compNm) = CreateObject("Scripting.Dictionary")
                     End If
-                    dic(compNm) = CLng(dic(compNm)) + 1
+                    If Not funcMap(compNm).Exists(CStr(funcArr(i, 1))) Then
+                        funcMap(compNm).Add CStr(funcArr(i, 1)), True
+                    End If
+                    hasLinkedComponent = True
                 End If
             Next j
+            If hasLinkedComponent Then
+                linkedFunctionCount = linkedFunctionCount + 1
+            End If
         End If
     Next i
 
@@ -544,7 +554,7 @@ Private Function BuildFunctionSummarySection(ByVal wsSum As Worksheet, ByVal wsF
 
     For i = 0 To dicOrd.Count - 1
         compNm = CStr(dicOrd(i))
-        done = CLng(dic(compNm))
+        done = CLng(funcMap(compNm).Count)
         total = totalFunctions
         pct = IIf(total > 0, done / total, 0)
         bars = Int(pct * barMax)
@@ -556,29 +566,24 @@ Private Function BuildFunctionSummarySection(ByVal wsSum As Worksheet, ByVal wsF
             .Cells(outRow, 4).Value = total - done
             .Cells(outRow, 5).Value = pct
             .Cells(outRow, 5).NumberFormat = "0.0%"
-            .Cells(outRow, 6).Value = String(bars, ChrW(&H25A0)) & String(barMax - bars, ChrW(&H25A1))
+            .Cells(outRow, 6).Value = BuildProgressBar(bars, barMax)
         End With
 
         ApplyProgressColor wsSum.Cells(outRow, 5), pct
         outRow = outRow + 1
     Next i
 
-    Dim linkedFunctions As Long
-    For i = 0 To dicOrd.Count - 1
-        linkedFunctions = linkedFunctions + CLng(dic(dicOrd(i)))
-    Next i
-
-    pct = IIf(totalFunctions * dicOrd.Count > 0, linkedFunctions / (totalFunctions * dicOrd.Count), 0)
+    pct = IIf(totalFunctions > 0, linkedFunctionCount / totalFunctions, 0)
     bars = Int(pct * barMax)
 
     With wsSum
         .Cells(outRow, 1).Value = "【関数サマリー合計】"
-        .Cells(outRow, 2).Value = totalFunctions * dicOrd.Count
-        .Cells(outRow, 3).Value = linkedFunctions
-        .Cells(outRow, 4).Value = (totalFunctions * dicOrd.Count) - linkedFunctions
+        .Cells(outRow, 2).Value = totalFunctions
+        .Cells(outRow, 3).Value = linkedFunctionCount
+        .Cells(outRow, 4).Value = totalFunctions - linkedFunctionCount
         .Cells(outRow, 5).Value = pct
         .Cells(outRow, 5).NumberFormat = "0.0%"
-        .Cells(outRow, 6).Value = String(bars, ChrW(&H25A0)) & String(barMax - bars, ChrW(&H25A1))
+        .Cells(outRow, 6).Value = BuildProgressBar(bars, barMax)
         .Range(.Cells(outRow, 1), .Cells(outRow, 6)).Interior.Color = RGB(30, 80, 160)
         .Range(.Cells(outRow, 1), .Cells(outRow, 6)).Font.Color = RGB(255, 255, 255)
         .Range(.Cells(outRow, 1), .Cells(outRow, 6)).Font.Bold = True
@@ -586,6 +591,20 @@ Private Function BuildFunctionSummarySection(ByVal wsSum As Worksheet, ByVal wsF
     End With
 
     BuildFunctionSummarySection = outRow
+
+End Function
+
+Private Function BuildProgressBar(ByVal filledCount As Long, ByVal maxCount As Long) As String
+
+    Dim safeFilled As Long
+    safeFilled = filledCount
+    If safeFilled < 0 Then
+        safeFilled = 0
+    ElseIf safeFilled > maxCount Then
+        safeFilled = maxCount
+    End If
+
+    BuildProgressBar = String(safeFilled, ChrW(&H25A0)) & String(maxCount - safeFilled, ChrW(&H25A1))
 
 End Function
 

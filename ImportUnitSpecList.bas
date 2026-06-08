@@ -508,18 +508,32 @@ Private Function BuildFunctionSummarySection(ByVal wsSum As Worksheet, ByVal wsF
     End With
 
     With wsSum
-        .Cells(startRow + 1, 1).Value = "【関数全体】"
-        .Cells(startRow + 1, 2).Value = totalFunctions
-        .Cells(startRow + 1, 3).Value = linkedFunctionCount
-        .Cells(startRow + 1, 4).Value = totalFunctions - linkedFunctionCount
-        .Cells(startRow + 1, 5).Value = pct
-        .Cells(startRow + 1, 5).NumberFormat = "0.0%"
-        .Cells(startRow + 1, 6).Value = BuildProgressBar(bars, barMax)
-        .Cells(startRow + 2, 1).Value = "【締め】"
-    End With
-    ApplySummaryClosingStyle wsSum, startRow + 2
+        .Cells(startRow + 1, 1).Value = ""
+        .Cells(startRow + 1, 2).Value = "関数数"
+        .Cells(startRow + 1, 3).Value = "紐づけ済"
+        .Cells(startRow + 1, 4).Value = "未紐づけ"
+        .Cells(startRow + 1, 5).Value = "進捗率"
+        .Cells(startRow + 1, 6).Value = "進捗"
 
-    BuildFunctionSummarySection = startRow + 2
+        .Cells(startRow + 2, 1).Value = "【関数全体】"
+        .Cells(startRow + 2, 2).Value = totalFunctions
+        .Cells(startRow + 2, 3).Value = linkedFunctionCount
+        .Cells(startRow + 2, 4).Value = totalFunctions - linkedFunctionCount
+        .Cells(startRow + 2, 5).Value = pct
+        .Cells(startRow + 2, 5).NumberFormat = "0.0%"
+        .Cells(startRow + 2, 6).Value = BuildProgressBar(bars, barMax)
+
+        .Cells(startRow + 3, 1).Value = "【締め】"
+    End With
+    With wsSum.Range(wsSum.Cells(startRow + 1, 1), wsSum.Cells(startRow + 1, 6))
+        .Interior.Color = RGB(0, 112, 192)
+        .Font.Color = RGB(255, 255, 255)
+        .Font.Bold = True
+    End With
+    ApplyProgressColor wsSum.Cells(startRow + 2, 5), pct
+    ApplySummaryClosingStyle wsSum, startRow + 3
+
+    BuildFunctionSummarySection = startRow + 3
 
 End Function
 

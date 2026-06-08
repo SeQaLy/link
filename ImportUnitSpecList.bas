@@ -261,13 +261,13 @@ Private Sub BuildProgressSheet()
         End If
     End If
 
-    ' ---- 仕様シートを配列に読み込み（2行目以降: A=コンポ名, E=関数名）----
+    ' ---- 仕様シートを配列に読み込み（2行目以降: A=コンポ名, D=関数名）----
     Dim specLastRow As Long
-    specLastRow = wsSpec.Cells(wsSpec.Rows.Count, 3).End(xlUp).Row
+    specLastRow = wsSpec.Cells(wsSpec.Rows.Count, 2).End(xlUp).Row
     If specLastRow < 2 Then Exit Sub
-
+    
     Dim specArr As Variant
-    specArr = wsSpec.Range(wsSpec.Cells(2, 1), wsSpec.Cells(specLastRow, 5)).Value
+    specArr = wsSpec.Range(wsSpec.Cells(2, 1), wsSpec.Cells(specLastRow, 4)).Value
 
     ' ---- コンポーネント名ごとに集計（Dictionary使用）----
     Dim dic     As Object
@@ -283,7 +283,7 @@ Private Sub BuildProgressSheet()
 
     For i = 1 To UBound(specArr, 1)
         compNm = Trim(CStr(specArr(i, 1)))   ' A列 = コンポーネント名
-        funcNm = Trim(CStr(specArr(i, 5)))   ' E列 = 関数名
+        funcNm = Trim(CStr(specArr(i, 4)))   ' D列 = 関数名
 
         If Not dic.Exists(compNm) Then
             dic.Add compNm, Array(0, 0)   ' (総数, 紐づけ済)
@@ -578,11 +578,13 @@ Private Sub BuildSpecSheet(wsDetail As Worksheet)
 
     Const SPEC_SHEET    As String = "仕様"
     Const FUNC_SHEET    As String = "関数"
+    Const FUNC_LIST_SHEET As String = "関数一覧"
     Const ID_LIST_SHEET As String = "ID一覧"
     Const ID_HEADER_ROW As Long   = 6  ' ID一覧のヘッダー行
 
     Dim wsSpec   As Worksheet
     Dim wsFunc   As Worksheet
+    Dim wsFuncList As Worksheet
     Dim wsIDList As Worksheet
     Dim ws       As Worksheet
 
@@ -623,6 +625,15 @@ Private Sub BuildSpecSheet(wsDetail As Worksheet)
         End If
     Next ws
 
+    ' ---- 関数一覧シートの取得 ----
+    Set wsFuncList = Nothing
+    For Each ws In ThisWorkbook.Worksheets
+        If ws.Name = FUNC_LIST_SHEET Then
+            Set wsFuncList = ws
+            Exit For
+        End If
+    Next ws
+
     ' ---- 仕様シートのクリア ----
     wsSpec.Cells.Clear
 
@@ -638,10 +649,9 @@ Private Sub BuildSpecSheet(wsDetail As Worksheet)
     ' ---- タイトル行 ----
     With wsSpec
         .Cells(1, 1).Value = "コンポーネント名"
-        .Cells(1, 2).Value = "機能名"
-        .Cells(1, 3).Value = "ソフトウェアユニット仕様ID"
-        .Cells(1, 4).Value = "ソフトウェアユニット仕様"
-        .Cells(1, 5).Value = "関数名"
+        .Cells(1, 2).Value = "ソフトウェアユニット仕様ID"
+        .Cells(1, 3).Value = "ソフトウェアユニット仕様"
+        .Cells(1, 4).Value = "関数名"
     End With
 
     ' ---- ユニット仕様一覧を配列に読み込み ----
@@ -668,36 +678,27 @@ Private Sub BuildSpecSheet(wsDetail As Worksheet)
     totalRows = UBound(detArr, 1)
 
     Dim outArr() As Variant
-    ReDim outArr(1 To totalRows, 1 To 5)
+    ReDim outArr(1 To totalRows, 1 To 4)
 
     Dim i As Long, j As Long
     Dim compName    As String   ' ユニット仕様一覧 A列（参照元識別子）
-    Dim compID      As String   ' ユニット仕様一覧 B列（コンポーネント仕様ID）
     Dim unitID      As String
     Dim unitSpec    As String
-    Dim featureName As String
     Dim funcName    As String
     Dim idA         As String
     Dim idD         As String
 
     For i = 1 To totalRows
         compName = Trim(CStr(detArr(i, 1)))   ' ユニット仕様一覧 A列（参照元識別子）
-        compID   = Trim(CStr(detArr(i, 2)))   ' ユニット仕様一覧 B列（コンポーネント仕様ID）
         unitID   = Trim(CStr(detArr(i, 6)))   ' ユニット仕様一覧 F列
         unitSpec = Trim(CStr(detArr(i, 7)))   ' ユニット仕様一覧 G列
-        featureName = ""
         funcName    = ""
 
         For j = 1 To UBound(idArr, 1)
             idA = Trim(CStr(idArr(j, 1)))   ' ID一覧 A列
             idD = Trim(CStr(idArr(j, 4)))   ' ID一覧 D列
-
+ 
             If idA = unitID And idD = unitSpec Then
-                ' 機能名: 最初の一致行から取得
-                If featureName = "" Then
-                    featureName = Trim(CStr(idArr(j, 3)))   ' ID一覧 C列
-                End If
-
                 ' 関数名: 一致する全行を改行で結合
                 Dim fn As String
                 fn = Trim(CStr(idArr(j, 9)))   ' ID一覧 I列
@@ -712,29 +713,29 @@ Private Sub BuildSpecSheet(wsDetail As Worksheet)
         Next j
 
         outArr(i, 1) = compName     ' 仕様 A列 = コンポーネント名（参照元識別子）
-        outArr(i, 2) = featureName  ' 仕様 B列 = 機能名
-        outArr(i, 3) = unitID       ' 仕様 C列 = ソフトウェアユニット仕様ID
-        outArr(i, 4) = unitSpec     ' 仕様 D列 = ソフトウェアユニット仕様
-        outArr(i, 5) = funcName     ' 仕様 E列 = 関数名
+        outArr(i, 2) = unitID       ' 仕様 B列 = ソフトウェアユニット仕様ID
+        outArr(i, 3) = unitSpec     ' 仕様 C列 = ソフトウェアユニット仕様
+        outArr(i, 4) = funcName     ' 仕様 D列 = 関数名
     Next i
 
     ' ---- 一括書き込み（2行目から）----
-    wsSpec.Range(wsSpec.Cells(2, 1), wsSpec.Cells(1 + totalRows, 5)).Value = outArr
+    wsSpec.Range(wsSpec.Cells(2, 1), wsSpec.Cells(1 + totalRows, 4)).Value = outArr
 
     ' ---- 関数シートへ書き込み（B列から、2行目以降）----
     If Not wsFunc Is Nothing Then
-        wsFunc.Range(wsFunc.Cells(2, 2), wsFunc.Cells(1 + totalRows, 6)).Value = outArr
+        wsFunc.Range(wsFunc.Cells(2, 2), wsFunc.Cells(1 + totalRows, 5)).Value = outArr
+        FillExistingFunctionNames wsFunc, wsFuncList, totalRows
     End If
 
     ' ---- 列幅自動調整・折り返し（関数名列）----
-    wsSpec.Columns("A:E").AutoFit
-    wsSpec.Columns("E").WrapText = True
+    wsSpec.Columns("A:D").AutoFit
+    wsSpec.Columns("D").WrapText = True
     If Not wsFunc Is Nothing Then
-        wsFunc.Columns("F").WrapText = True
+        wsFunc.Columns("E").WrapText = True
     End If
 
-    ' ---- タイトル行の書式（A1:E1）----
-    With wsSpec.Range("A1:E1")
+    ' ---- タイトル行の書式（A1:D1）----
+    With wsSpec.Range("A1:D1")
         .Interior.Color = RGB(0, 112, 192)
         .Font.Color = RGB(255, 255, 255)
         .Font.Bold = True
@@ -742,9 +743,9 @@ Private Sub BuildSpecSheet(wsDetail As Worksheet)
 
     ' ---- 罫線（データ全体）----
     Dim specDataLastRow As Long
-    specDataLastRow = wsSpec.Cells(wsSpec.Rows.Count, 3).End(xlUp).Row
+    specDataLastRow = wsSpec.Cells(wsSpec.Rows.Count, 2).End(xlUp).Row
     If specDataLastRow >= 1 Then
-        With wsSpec.Range(wsSpec.Cells(1, 1), wsSpec.Cells(specDataLastRow, 5)).Borders
+        With wsSpec.Range(wsSpec.Cells(1, 1), wsSpec.Cells(specDataLastRow, 4)).Borders
             .LineStyle = xlContinuous
             .Weight = xlThin
             .Color = RGB(0, 0, 0)
@@ -752,6 +753,80 @@ Private Sub BuildSpecSheet(wsDetail As Worksheet)
     End If
 
 End Sub
+
+Private Sub FillExistingFunctionNames(ByVal wsFunc As Worksheet, ByVal wsFuncList As Worksheet, ByVal totalRows As Long)
+
+    If wsFunc Is Nothing Then Exit Sub
+    If wsFuncList Is Nothing Then Exit Sub
+    If totalRows <= 0 Then Exit Sub
+
+    Dim funcListLastRow As Long
+    funcListLastRow = wsFuncList.Cells(wsFuncList.Rows.Count, 1).End(xlUp).Row
+    If funcListLastRow < 2 Then Exit Sub
+
+    Dim listArr As Variant
+    listArr = wsFuncList.Range(wsFuncList.Cells(2, 1), wsFuncList.Cells(funcListLastRow, 1)).Value
+
+    Dim funcDic As Object
+    Set funcDic = CreateObject("Scripting.Dictionary")
+
+    Dim i As Long
+    Dim funcName As String
+    For i = 1 To UBound(listArr, 1)
+        funcName = Trim(CStr(listArr(i, 1)))
+        If funcName <> "" Then
+            If Not funcDic.Exists(funcName) Then
+                funcDic.Add funcName, funcName
+            End If
+        End If
+    Next i
+
+    If funcDic.Count = 0 Then Exit Sub
+
+    Dim funcArr As Variant
+    funcArr = wsFunc.Range(wsFunc.Cells(2, 5), wsFunc.Cells(1 + totalRows, 5)).Value
+
+    Dim existingArr() As Variant
+    ReDim existingArr(1 To totalRows, 1 To 1)
+
+    For i = 1 To totalRows
+        existingArr(i, 1) = FindMatchingFunctions(CStr(funcArr(i, 1)), funcDic)
+    Next i
+
+    wsFunc.Range(wsFunc.Cells(2, 1), wsFunc.Cells(1 + totalRows, 1)).Value = existingArr
+    wsFunc.Columns("A").WrapText = True
+
+End Sub
+
+Private Function FindMatchingFunctions(ByVal functionText As String, ByVal funcDic As Object) As String
+
+    Dim normalizedText As String
+    normalizedText = Replace(functionText, vbCrLf, vbLf)
+    normalizedText = Replace(normalizedText, vbCr, vbLf)
+
+    Dim items() As String
+    items = Split(normalizedText, vbLf)
+
+    Dim i As Long
+    Dim item As String
+    Dim matches As String
+
+    For i = LBound(items) To UBound(items)
+        item = Trim$(items(i))
+        If item <> "" Then
+            If funcDic.Exists(item) Then
+                If matches = "" Then
+                    matches = item
+                ElseIf InStr(1, vbLf & matches & vbLf, vbLf & item & vbLf, vbBinaryCompare) = 0 Then
+                    matches = matches & vbLf & item
+                End If
+            End If
+        End If
+    Next i
+
+    FindMatchingFunctions = matches
+
+End Function
 
 ' ----------------------------------------------------------
 ' 「ユニット仕様一覧」シートの書式を設定する

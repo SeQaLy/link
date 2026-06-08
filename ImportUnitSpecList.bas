@@ -328,6 +328,7 @@ Private Sub BuildProgressSheet()
     Set dicOrd = CreateObject("Scripting.Dictionary")
 
     Dim i       As Long
+    Dim k       As Long
     Dim compNm  As String
     Dim funcNm  As String
     Dim ordIdx  As Long
@@ -362,21 +363,23 @@ Private Sub BuildProgressSheet()
     grandPct = IIf(grandTotal > 0, grandDone / grandTotal, 0)
 
     ' ---- 仕様単位サマリー（全体）----
-    With wsSum
-        .Cells(1, 1).Value = "【仕様単位サマリー】"
-        .Cells(1, 2).Value = grandTotal
-        .Cells(1, 3).Value = grandDone
-        .Cells(1, 4).Value = grandTotal - grandDone
-        .Cells(1, 5).Value = grandPct
-        .Cells(1, 5).NumberFormat = "0.0%"
-        .Cells(1, 6).Value = BuildProgressBar(Int(grandPct * BAR_MAX), BAR_MAX)
-    End With
+    wsSum.Cells(1, 1).Value = "【仕様単位サマリー】"
     With wsSum.Range(wsSum.Cells(1, 1), wsSum.Cells(1, 6))
         .Interior.Color = RGB(30, 80, 160)
         .Font.Color = RGB(255, 255, 255)
         .Font.Bold = True
     End With
-    wsSum.Cells(1, 5).Interior.Color = RGB(30, 80, 160)
+
+    With wsSum
+        .Cells(2, 1).Value = "【仕様全体】"
+        .Cells(2, 2).Value = grandTotal
+        .Cells(2, 3).Value = grandDone
+        .Cells(2, 4).Value = grandTotal - grandDone
+        .Cells(2, 5).Value = grandPct
+        .Cells(2, 5).NumberFormat = "0.0%"
+        .Cells(2, 6).Value = BuildProgressBar(Int(grandPct * BAR_MAX), BAR_MAX)
+    End With
+    ApplySummaryClosingStyle wsSum, 2
 
     ' ---- タイトル行 ----
     With wsSum
@@ -391,7 +394,6 @@ Private Sub BuildProgressSheet()
     ' ---- コンポーネントごとの行 ----
     Dim outRow As Long
     outRow = 4
-    Dim k       As Long
     Dim total   As Long
     Dim done    As Long
     Dim pct     As Double
@@ -509,23 +511,39 @@ Private Function BuildFunctionSummarySection(ByVal wsSum As Worksheet, ByVal wsF
     pct = IIf(totalFunctions > 0, linkedFunctionCount / totalFunctions, 0)
     bars = Int(pct * barMax)
 
-    With wsSum
-        .Cells(startRow, 1).Value = "【関数単位サマリー】"
-        .Cells(startRow, 2).Value = totalFunctions
-        .Cells(startRow, 3).Value = linkedFunctionCount
-        .Cells(startRow, 4).Value = totalFunctions - linkedFunctionCount
-        .Cells(startRow, 5).Value = pct
-        .Cells(startRow, 5).NumberFormat = "0.0%"
-        .Cells(startRow, 6).Value = BuildProgressBar(bars, barMax)
-        .Range(.Cells(startRow, 1), .Cells(startRow, 6)).Interior.Color = RGB(30, 80, 160)
-        .Range(.Cells(startRow, 1), .Cells(startRow, 6)).Font.Color = RGB(255, 255, 255)
-        .Range(.Cells(startRow, 1), .Cells(startRow, 6)).Font.Bold = True
-        .Cells(startRow, 5).Interior.Color = RGB(30, 80, 160)
+    wsSum.Cells(startRow, 1).Value = "【関数単位サマリー】"
+    With wsSum.Range(wsSum.Cells(startRow, 1), wsSum.Cells(startRow, 6))
+        .Interior.Color = RGB(30, 80, 160)
+        .Font.Color = RGB(255, 255, 255)
+        .Font.Bold = True
     End With
 
-    BuildFunctionSummarySection = startRow
+    With wsSum
+        .Cells(startRow + 1, 1).Value = "【関数全体】"
+        .Cells(startRow + 1, 2).Value = totalFunctions
+        .Cells(startRow + 1, 3).Value = linkedFunctionCount
+        .Cells(startRow + 1, 4).Value = totalFunctions - linkedFunctionCount
+        .Cells(startRow + 1, 5).Value = pct
+        .Cells(startRow + 1, 5).NumberFormat = "0.0%"
+        .Cells(startRow + 1, 6).Value = BuildProgressBar(bars, barMax)
+        .Cells(startRow + 2, 1).Value = "【締め】"
+    End With
+    ApplySummaryClosingStyle wsSum, startRow + 2
+
+    BuildFunctionSummarySection = startRow + 2
 
 End Function
+
+Private Sub ApplySummaryClosingStyle(ByVal wsSum As Worksheet, ByVal targetRow As Long)
+
+    With wsSum.Range(wsSum.Cells(targetRow, 1), wsSum.Cells(targetRow, 6))
+        .Interior.Color = RGB(30, 80, 160)
+        .Font.Color = RGB(255, 255, 255)
+        .Font.Bold = True
+    End With
+    wsSum.Cells(targetRow, 5).Interior.Color = RGB(30, 80, 160)
+
+End Sub
 
 Private Function BuildProgressBar(ByVal filledCount As Long, ByVal maxCount As Long) As String
 
